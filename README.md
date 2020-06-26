@@ -12,8 +12,5 @@ The scripts require two configuration variables to be set:
 * WIKI_WORKING_DIR = location of where results are to be output
 
 There are two configuration files required:
-* bot-info.txt = Wikipedia login information for the bot of the format:
-    USERNAME = <username>
-    PASSWORD = <password>
-* email-info.txt = Email address required for crossref.org API:
-    EMAIL = <email>
+* bot-info.txt = Wikipedia login information for the bot. The format is seperate `<keyword> = <value>` lines with the keywords being USERNAME and PASSWORD.
+* email-info.txt = Email address required for the crossref.org API. The format is seperate `<keyword> = <value>` line with the keyword being EMAIL.
