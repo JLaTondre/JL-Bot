@@ -1,0 +1,339 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::Basename;
+use Getopt::Std;
+use POSIX qw(ceil floor);
+
+use lib dirname(__FILE__) . '/modules';
+
+use mybot;
+
+use utf8;
+
+#
+# Configuration & Explicit Globals
+#
+
+my $linkmin  = 3;                     # requires > this number of links to remove template
+
+my @orphanTemplates = (               # orphan templates
+    'Template:Orphan',                # primary (non-redirect) one must be first
+    'Template:Lonely',
+    'Template:Do-attempt',
+);
+
+my @dabTemplates = (                  # dab templates
+    'Template:Disambiguation',
+    'Template:Dmbox',
+    'Template:Airport disambiguation',
+    'Template:Biology disambiguation',
+    'Template:Call sign disambiguation',
+    'Template:Chinese title disambiguation',
+    'Template:Disambiguation cleanup',
+    'Template:Genus disambiguation',
+    'Template:Geodis',
+    'Template:Hndis',
+    'Template:Hndis-cleanup',
+    'Template:Hospital disambiguation',
+    'Template:Hurricane disambiguation',
+    'Template:Letter disambiguation',
+    'Template:Letter-Number Combination Disambiguation',
+    'Template:Mathematical disambiguation',
+    'Template:Mil-unit-dis',
+    'Template:Numberdis',
+    'Template:Disambig-plants',
+    'Template:Road disambiguation',
+    'Template:School disambiguation',
+    'Template:Species Latin name abbreviation disambiguation',
+    'Template:Species Latin name disambiguation',
+    'Template:Synagogue disambiguation',
+    'Template:Taxonomic authority disambiguation',
+    'Template:Taxonomy disambiguation',
+    'Template:Wikipedia disambiguation',
+    'Template:Set index article',
+    'Template:Given name',
+    'Template:Lake index',
+    'Template:Mountain index',
+    'Template:Plant common name',
+    'Template:Roadindex',
+    'Template:Shipindex',
+    'Template:Sportindex',
+    'Template:Surname',
+    'Template:Molecular formula index',
+);
+
+my $userinfo = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';  # user & pass info file
+
+my @problems;     # pages with problems
+
+#
+# Subroutines
+#
+
+sub retrieveOrphans {
+
+   # This subroutine finds the transclusions of the orphan template in the main
+   # and talk namespaces.  It is passed the bot and template.  It returns a hash
+   # ref with the normalized article names.
+
+    my $bot      = shift;
+    my $template = shift;
+
+    my $start = $bot->getTransclusions($template, '0|1');
+
+    my $normalized;
+
+    for my $page (keys %$start) {
+        (my $mainspace = $page) =~ s/^Talk://;
+        $normalized->{$mainspace} = $page;
+    }
+
+    return $normalized;
+}
+
+sub numberlinks {
+
+    # This subroutine finds the number of article links to a page.  It is passed
+    # the bot handle and the name of the page.  It returns number of links.
+
+    my $bot  = shift;
+    my $page = shift;
+
+    my $links = $bot->getBacklinks($page, 1);
+
+    my $number = 0;
+
+    for my $title (keys %$links) {
+
+        # skip disambig pages:
+        next if ($title =~ /\(disambig\)/i);
+        next if ($title =~ /\(disambiguation\)/i);
+        next if ($title =~ /\(name\)/i);
+        next if ($title =~ /\(surname\)/i);
+
+        # skip lists:
+        next if ($title =~ /^List of/i);
+        next if ($title =~ /^Lists of/i);
+        next if ($title =~ /^\d{4}s?\sin\s/i);     # YYYY(s) in
+        next if ($title =~ /^Deaths\sin\s/i);
+
+        # skip dates:
+        next if ($title =~ /^January \d/);
+        next if ($title =~ /^February \d/);
+        next if ($title =~ /^March \d/);
+        next if ($title =~ /^April \d/);
+        next if ($title =~ /^May \d/);
+        next if ($title =~ /^June \d/);
+        next if ($title =~ /^July \d/);
+        next if ($title =~ /^August \d/);
+        next if ($title =~ /^September \d/);
+        next if ($title =~ /^October \d/);
+        next if ($title =~ /^November \d/);
+        next if ($title =~ /^December \d/);
+        next if ($title =~ /^\d{1,4}(?:\sBC)?$/);  # years
+
+        # skip pseudo-namespace:
+        next if ($title =~ /^CAT:/i);
+        next if ($title =~ /^MOS:/i);
+        next if ($title =~ /^P:/i);
+        next if ($title =~ /^Transwiki:/i);
+
+        # skip special cases:
+        next if ($title =~ /^Library of Congress Classification:/i);
+
+        $number++;
+    }
+
+    return $number;
+}
+
+sub removetemplates {
+
+   # This subroutine removes templates from a string.  It is passed the text to
+   # process and an array reference for the templates to remove.  It returns the
+   # modified text.
+
+    my $text      = shift;
+    my $templates = shift;
+
+    my $new = $text;
+
+    for my $template (@$templates) {
+
+        # process all as an article can have multiple
+
+        my $match = $template;          # re-assign as else changes global?!?
+        $match =~ s/^Template://;
+
+        $new =~ s/^\{\{\s*(?:Template:)?$match(?:\s*\|[^}]+)?\s*\}\}\n*//ig;     # at start of article (w/ or w/o newline)
+        $new =~ s/\n\{\{\s*(?:Template:)?$match(?:\s*\|[^}]+)?\s*\}\}\n+/\n/ig;  # multiple newlines replaced with one
+        $new =~ s/\{\{\s*(?:Template:)?$match(?:\s*\|[^}]+)?\s*\}\}//ig;         # in-line
+
+    }
+
+    # handle multiple issues box:
+
+    $new =~ s/\{\{((?:Article\s?)?issues[^}]*)\|\s*orphan\s*=[^|}]+\}\}/{{$1}}/is;              # orphan at end
+    $new =~ s/\{\{((?:Article\s?)?issues[^}]*)\|\s*orphan\s*=[^|}]+(\|[^}]+)*\}\}/{{$1$2}}/is;  # orphan in middle
+
+    $new =~ s/\{\{((?:Article\s?)?issues[^}]*)\|\s*do-attempt\s*=[^|}]+\}\}/{{$1}}/is;              # do-attempt at end
+    $new =~ s/\{\{((?:Article\s?)?issues[^}]*)\|\s*do-attempt\s*=[^|}]+(\|[^}]+)*\}\}/{{$1$2}}/is;  # do-attempt in middle
+
+    # alternate
+
+    $new =~ s/\{\{((?:Multiple\s?)?issues[^}]*)\|\s*orphan\s*=[^|}]+\}\}/{{$1}}/is;              # orphan at end
+    $new =~ s/\{\{((?:Multiple\s?)?issues[^}]*)\|\s*orphan\s*=[^|}]+(\|[^}]+)*\}\}/{{$1$2}}/is;  # orphan in middle
+
+    $new =~ s/\{\{((?:Multiple\s?)?issues[^}]*)\|\s*do-attempt\s*=[^|}]+\}\}/{{$1}}/is;              # do-attempt at end
+    $new =~ s/\{\{((?:Multiple\s?)?issues[^}]*)\|\s*do-attempt\s*=[^|}]+(\|[^}]+)*\}\}/{{$1$2}}/is;  # do-attempt in middle
+
+    return $new;
+}
+
+sub deorphan {
+
+    # This subroutine deorphans an article.  It is passed the bot and page to
+    # process.  It returns nothing.  It uses the globals @orphanTemplates and
+    # @problems.
+
+    my $bot  = shift;
+    my $page = shift;
+
+    my ($text, $timestamp) = $bot->getText($page);
+
+    my $new = removetemplates($text, \@orphanTemplates);
+
+    if ($text eq $new) {
+        warn "  no change made! Huh?!?\n\n";
+        push @problems, $page;
+    }
+    else {
+        print "  saving change...\n\n";
+        my $commsg = "removing orphan template as not a valid orphan";
+        $bot->saveText($page, $timestamp, $new, $commsg, 'Minor', 'Bot');
+    }
+
+    return;
+
+}
+
+#
+# Main
+#
+
+# command line options
+
+my %opts;
+getopts('hn:s:', \%opts);
+
+if ($opts{h}) {
+    print "usage: wiki-bot-orphans [-n #]\n";
+    print "       where: -h = help\n";
+    print "              -n = maximum number of edits\n";
+    print "              -s = starting letter\n";
+    exit;
+}
+
+my $nFlag = $opts{n} ? $opts{n} : 0;      # specify number of edits
+my $sFlag = $opts{s} ? $opts{s} : 0;      # specify starting letter
+
+# handle UTF-8
+
+binmode(STDOUT, ':utf8');
+binmode(STDERR, ':utf8');
+
+# auto-flush output
+
+$| = 1;
+
+# initialize bot
+
+my $bot = mybot->new($userinfo);
+
+# query orphan templates
+
+my $orphanTemplate = $orphanTemplates[0];
+
+print "Retrieving transclusions of $orphanTemplate ... ";
+
+my $orphans = retrieveOrphans($bot, $orphanTemplate);
+
+my $total = scalar(keys %$orphans);
+my $count = 0;
+my $edits = 0;
+
+print "$total\n\n";
+
+# find transclusions of dab templates
+
+unless ($sFlag) {
+
+    my %dabs;
+
+    for my $template (sort @dabTemplates) {
+        print "Retrieving transclusions of $template ... ";
+        my $results = $bot->getTransclusions($template, "0");
+        print scalar(keys %$results) . "\n\n";
+        %dabs = (%dabs, %$results);
+    }
+
+    my @invalid = grep exists $dabs{ $_ }, keys %$orphans;
+
+    for my $page (sort @invalid) {
+        print "Removing as $page is a disambiguation (or related page) ...\n";
+        deorphan($bot, $orphans->{$page});
+        $edits++;
+        delete $orphans->{$page};
+    }
+
+}
+
+# process individual orphan pages
+
+for my $page (sort keys %$orphans) {
+
+    $count++;
+
+    next if (($sFlag) and ($page lt $sFlag));
+
+    print "Processing $count of $total:  $page ...\n";
+
+    if ( ($page =~ / \(disambiguation\)$/) or
+        ($page =~ / \(surname\)$/)        or
+        ($page =~ / \(name\)$/)           ) {
+        print "  need to handle\n\n";
+        push @problems, $page;
+        next;
+    }
+
+    my $links = numberlinks($bot, $page);
+
+    if (not $links > $linkmin) {
+        print "  skipping as only $links link(s)\n\n";
+    }
+    else {
+
+        print "  removing as $links links exceeds minimum\n";
+
+        deorphan($bot, $orphans->{$page});
+
+        $edits++;
+        if ($nFlag and ($edits >= $nFlag) ) {
+            print "\nMaximum number of edits reached!\n\n";
+            last;
+        }
+
+    }
+
+}
+
+if (@problems) {
+    print "\n\nProblems:\n\n";
+    for (sort @problems) {
+        print "  $_\n";
+    }
+    print "\n";
+}

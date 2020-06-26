@@ -1,0 +1,1476 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Date::EzDate;
+use File::Basename;
+use Getopt::Std;
+use POSIX qw(ceil floor);
+use Sort::Key::Natural qw(natsort rnatsort);
+
+use lib dirname(__FILE__) . '/modules';
+
+use mybot;
+
+use experimental qw( switch );
+use utf8;
+
+#
+# Validate Environment Variables
+#
+
+unless (exists $ENV{'WIKI_CONFIG_DIR'}) {
+    die "ERROR: WIKI_CONFIG_DIR environment variable not set\n";
+}
+
+#
+# Configuration & Explicit Globals
+#
+
+my $template = "User:JL-Bot/Project content";       # template to control bot
+
+my %sections = (                                    # content types & their respective section names
+    'content-featured-articles'           => 'Featured articles',
+    'content-former-featured-articles'    => 'Former featured articles',
+    'content-featured-lists'              => 'Featured lists',
+    'content-former-featured-lists'       => 'Former featured lists',
+    'content-good-articles'               => 'Good articles',
+    'content-former-good-articles'        => 'Former good articles',
+    'content-did-you-know-articles'       => '\'\'Did you know?\'\' articles',
+    'content-featured-pictures'           => 'Featured pictures',
+    'content-former-featured-pictures'    => 'Former featured pictures',
+    'content-featured-portals'            => 'Featured portals',
+    'content-former-featured-portals'     => 'Former featured portals',
+    'content-featured-article-candidates' => 'Featured article candidates',
+    'content-featured-list-candidates'    => 'Featured list candidates',
+    'content-good-article-nominees'       => 'Good article nominees',
+    'content-a-class-articles'            => 'A-Class articles',
+    'content-b-class-articles'            => 'B-Class articles',
+    'content-c-class-articles'            => 'C-Class articles',
+    'content-mainpage-in-the-news'        => 'In the News articles',
+    'content-mainpage-featured'           => 'Main page featured articles',
+    'content-mainpage-lists'              => 'Main page featured lists',
+    'content-picture-of-the-day'          => 'Picture of the day pictures',
+    'content-featured-topics'             => 'Featured topics',
+    'content-good-topics'                 => 'Good topics',
+    'content-former-featured-topics'      => 'Former featured topics',
+    'content-featured-sounds'             => 'Featured sounds',
+    'content-vital-articles-level-1'      => 'Level 1 vital articles',
+    'content-vital-articles-level-2'      => 'Level 2 vital articles',
+    'content-vital-articles-level-3'      => 'Level 3 vital articles',
+    'content-vital-articles-level-4'      => 'Level 4 vital articles',
+    'content-vital-articles-level-5'      => 'Level 5 vital articles',
+);
+
+my %sources = (                                     # content types & their respective sources
+    'content-featured-articles'           => { 'Category:Wikipedia featured articles' => 1, },
+    'content-former-featured-articles'    => { 'Category:Wikipedia former featured articles' => 1, },
+    'content-featured-lists'              => { 'Category:Wikipedia featured lists' => 1, },
+    'content-former-featured-lists'       => { 'Category:Wikipedia former featured lists' => 1, },
+    'content-good-articles'               => { 'Category:Wikipedia good articles' => 1, },
+    'content-former-good-articles'        => { 'Category:Delisted good articles' => 1, },
+    'content-did-you-know-articles'       => { 'Category:Wikipedia Did you know articles' => 1,
+                                               'Category:Wikipedia Did you know articles that are featured articles' => 1,
+                                               'Category:Wikipedia Did you know articles that are featured lists' => 1,
+                                               'Category:Wikipedia Did you know articles that are good articles' => 1,
+                                             },
+    'content-featured-pictures'           => { 'Category:Featured pictures' => 1, },
+    'content-former-featured-pictures'    => { 'Category:Wikipedia former featured pictures' => 1, },
+    'content-featured-portals'            => { 'Category:Wikipedia featured portals' => 1, },
+    'content-former-featured-portals'     => { 'Category:Wikipedia former featured portals' => 1, },
+    'content-featured-article-candidates' => { 'Category:Wikipedia featured article candidates' => 1, },
+    'content-featured-list-candidates'    => { 'Category:Wikipedia featured list candidates' => 1, },
+    'content-good-article-nominees'       => { 'Category:Good article nominees' => 1, },
+    'content-a-class-articles'            => { },
+    'content-b-class-articles'            => { },
+    'content-c-class-articles'            => { },
+    'content-mainpage-in-the-news'        => { 'Category:Wikipedia In the news articles' => 1, },
+    'content-mainpage-featured'           => { 'Category:Featured articles that have appeared on the main page' => 1, },
+    'content-mainpage-lists'              => { 'Category:Featured lists that have appeared on the main page' => 1, },
+    'content-picture-of-the-day'          => { 'Template:Picture of the day' => 1, },
+    'content-featured-topics'             => { 'Category:Wikipedia fully featured topics' => 1,
+                                               'Category:Featured topics' => 1,
+                                             },
+    'content-good-topics'                 => { 'Category:Wikipedia Good topics' => 1, },
+    'content-former-featured-topics'      => { 'Category:Wikipedia former featured topics' => 1, },
+    'content-featured-sounds'             => { 'Template:Featured sound' => 1, },
+    'content-vital-articles-level-1'      => { 'Category:All Wikipedia level-1 vital articles' => 1, },
+    'content-vital-articles-level-2'      => { 'Category:All Wikipedia level-2 vital articles' => 1, },
+    'content-vital-articles-level-3'      => { 'Category:All Wikipedia level-3 vital articles' => 1, },
+    'content-vital-articles-level-4'      => { 'Category:All Wikipedia level-4 vital articles' => 1, },
+    'content-vital-articles-level-5'      => { 'Category:All Wikipedia level-5 vital articles' => 1, },
+);
+
+my %icons = (                                       # content types & their respective icons
+    'content-featured-articles'           => '{{icon|FA}}',
+    'content-former-featured-articles'    => '{{icon|DFA}}',
+    'content-featured-lists'              => '{{icon|FL}}',
+    'content-former-featured-lists'       => '{{icon|DFL}}',
+    'content-good-articles'               => '{{icon|GA}}',
+    'content-former-good-articles'        => '{{icon|DGA}}',
+    'content-did-you-know-articles'       => '{{icon|DYK}}',
+    'content-featured-pictures'           => '{{icon|FP}}',
+    'content-former-featured-pictures'    => '{{icon|FFP}}',
+    'content-featured-portals'            => '{{icon|FPo}}',
+    'content-former-featured-portals'     => '{{icon|FFPo}}',
+    'content-featured-article-candidates' => '{{icon|FAC}}',
+    'content-featured-list-candidates'    => '{{icon|FLC}}',
+    'content-good-article-nominees'       => '{{icon|GAN}}',
+    'content-a-class-articles'            => '{{icon|A}}',
+    'content-b-class-articles'            => '{{icon|B}}',
+    'content-c-class-articles'            => '{{icon|C}}',
+    'content-mainpage-in-the-news'        => '',
+    'content-mainpage-featured'           => '',
+    'content-mainpage-lists'              => '',
+    'content-picture-of-the-day'          => '',
+    'content-featured-topics'             => '{{icon|FT}}',
+    'content-good-topics'                 => '{{icon|GT}}',
+    'content-former-featured-topics'      => '{{icon|FFT}}',
+    'content-featured-sounds'             => '{{icon|FS}}',
+    'content-vital-articles-level-1'      => '{{icon|Vital}}',
+    'content-vital-articles-level-2'      => '{{icon|Vital}}',
+    'content-vital-articles-level-3'      => '{{icon|Vital}}',
+    'content-vital-articles-level-4'      => '{{icon|Vital}}',
+    'content-vital-articles-level-5'      => '{{icon|Vital}}',
+);
+
+my %dateTypes = (                                   # content types which have main page dates
+    'content-did-you-know-articles'       => '\'\'Did you know?\'\' articles',
+    'content-mainpage-in-the-news'        => 'In the News articles',
+    'content-mainpage-featured'           => 'Main page featured articles',
+    'content-mainpage-lists'              => 'Main page featured lists',
+    'content-picture-of-the-day'          => 'Picture of the day pictures',
+);
+
+my $header = '<!-- Start of content generated by JL-Bot -->';
+my $footer = '<!-- End of content generated by JL-Bot -->';
+
+my $botinfo = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';   # user & pass info file
+
+my $articlehistory;   # hold articlehistory template parsing errors
+my $dyktalk;          # hold dyktalk template parsing errors
+my $itntalk;          # hold itntalk template parsing errors
+my $pictureoftheday;  # hold pictureoftheday template parsing errors
+my $vital;            # hold vital template parsing errors
+
+#
+# Subroutines
+#
+
+sub getParameters {
+
+    # This subroutine extracts the template parameters from a page transcluding
+    # the bot template.  It is passed the bot and the page to process.  It
+    # returns a hash ref with the parameters, 'NONE' if no template actually
+    # transcluded, or 'ERROR' if an error in the parameters.
+
+    my $bot  = shift;
+    my $page = shift;
+
+    # determine parameters
+
+    my ($text, ) = $bot->getText($page);
+
+    my $check = $text =~ /\{\{\s*User:JL-Bot\/Project[\s_]content\n?([^}]+)\n?\}\}/ims;
+    my $settings = $1;
+
+    unless ($check) {
+        print "  Template not detected\n\n";
+        return 'NONE';
+    }
+
+    # process parameters
+
+    my $project      = {};            # project templates & categories
+    my @types        = ();            # content types to include
+    my $aClass       = {};            # project a-class sources
+    my $bClass       = {};            # project b-class sources
+    my $cClass       = {};            # project c-class sources
+    my $columns      = 0;
+    my $iconsPage    = 0;
+    my $iconsHeading = 0;
+    my $compact      = 0;
+    my $heading      = 100;           # 100 - use as default
+    my $noheading    = 0;
+    my $pictures     = 0;
+    my $maximum      = 0;
+    my $sorting      = 'default';     # default = use as default
+    my $dates        = 0;
+    my $dateOrder    = 'increasing';  # increasing - use as default
+    my $displayTotal = 0;
+    my $overflowDYK  = 0;
+    my $overflowFA   = 0;
+    my $overflowGA   = 0;
+    my $overflowA    = 0;
+    my $overflowB    = 0;
+    my $overflowC    = 0;
+    my $overflowV1   = 0;
+    my $overflowV2   = 0;
+    my $overflowV3   = 0;
+    my $overflowV4   = 0;
+    my $overflowV5   = 0;
+    my $small        = 0;
+    my $dykblurb     = 0;
+    my $italicize    = 0;
+
+    my %duplicate    = ();            # use to ignore duplicate content types
+
+    for (split /\|/, $settings) {
+
+        chomp;
+
+        # look for 'template' parameter
+
+        if (/^\s*template\d*\s*=\s*(.+?)$/i) {
+            my $template = $1;
+            next if ($template eq ' ');   # handle missing parameter (skip)
+            $template = "Template:$template" unless ($template =~ /^Template:/);
+            $project->{$template} = 1;
+        }
+
+        # look for 'category' parameter
+
+        if (/^\s*category\d*\s*=\s*(.+?)$/i) {
+            my $category = $1;
+            $category = "Category:$category" unless ($category =~ /^Category:/);
+            $project->{$category} = 1;
+        }
+
+        # look for 'content' parameter (non-assigned)
+
+        if (/^\s*(content-[\w-]+)\s*$/i) {
+            next if ($1 eq 'content-valued-pictures');            # content type deleted at MfD
+            next if ($1 eq 'content-featured-sound-candidates');  # content type abandoned & category deleted at CfD
+            next if (exists $duplicate{$1});                      # ignore if already been seen
+            $duplicate{$1} = 1;
+            push @types, lc $1;
+        }
+
+        # look for 'content-[abc]-class-articles'
+
+        if (/^\s*(content-([abc])-class-articles)\d*\s*=\s*(.+?)\s*$/i) {
+            my $type     = $1;
+            my $level    = $2;
+            my $category = $3;
+            $category = "Category:$category" unless ($category =~ /^Category:/);
+            next if (exists $duplicate{$type});           # ignore if already been seen
+            $duplicate{$type} = 1;
+            push @types, lc $type;
+            given ($level) {
+                when ('a') { $aClass->{$category} = 1; }
+                when ('b') { $bClass->{$category} = 1; }
+                when ('c') { $cClass->{$category} = 1; }
+                default { die "ERROR: Impossible level! [$level]\n"; }
+            }
+        }
+
+        # look for 'columns' parameter
+
+        if (/^\s*columns\s*=\s*(.+?)\s*$/i) {
+            $columns = $1;
+        }
+
+        # look for 'icons' parameter
+
+        if (/^\s*icons\s*$/i) {
+            $iconsPage = 1;
+        }
+
+        # look for 'icons-heading' parameter
+
+        if (/^\s*icons-heading\s*$/i) {
+            $iconsHeading = 1;
+        }
+
+        # look for 'compact' parameter
+
+        if (/^\s*compact\s*$/i) {
+            $compact = 1;
+        }
+
+        # look for 'heading' parameter
+
+        if (/^\s*heading\s*=\s*(\d+)\s*$/i) {
+            $heading = $1;
+        }
+
+        # look for 'noheading' parameter
+
+        if (/^\s*noheading\s*$/i) {
+            $noheading = 1;
+        }
+
+        # look for 'pictures' parameter
+
+        if (/^\s*pictures-list\s*$/i) {
+            $pictures = 1;
+        }
+
+        # look for 'maximum' parameter
+
+        if (/^\s*maximum\s*=\s*(\d+)\s*$/i) {
+            $maximum = $1;
+        }
+
+        # look for 'sorting' parameter
+
+        if (/^\s*sorting\s*=\s*(.+?)\s*$/i) {
+            $sorting = $1;
+        }
+
+        # look for 'dates' parameter
+
+        if (/^\s*dates\s*$/i) {
+            $dates = 1;
+        }
+
+        # look for 'date-order' parameter
+
+        if (/^\s*date-order\s*=\s*(.+?)\s*$/i) {
+            $dateOrder = $1;
+        }
+
+        # look for 'display-total' parameter
+
+        if (/^\s*display-total\s*$/i) {
+            $displayTotal = 1;
+        }
+
+        # look for 'overflow-TYPE' parameter
+
+        if (/^\s*overflow-(.+?)\s*=\s*(.+?)\s*$/i) {
+            my $type = $1;
+            my $value = $2;
+            given ($type) {
+                when ('DYK')     { $overflowDYK = $value; }
+                when ('FA')      { $overflowFA  = $value; }
+                when ('GA')      { $overflowGA  = $value; }
+                when ('a-class') { $overflowA   = $value; }
+                when ('b-class') { $overflowB   = $value; }
+                when ('c-class') { $overflowC   = $value; }
+                when ('vital-1') { $overflowV1  = $value; }
+                when ('vital-2') { $overflowV2  = $value; }
+                when ('vital-3') { $overflowV3  = $value; }
+                when ('vital-4') { $overflowV4  = $value; }
+                when ('vital-5') { $overflowV5  = $value; }
+            }
+        }
+
+        # look for 'small' parameter
+
+        if (/^\s*small\s*$/i) {
+            $small = 1;
+        }
+
+        # look for 'dyk-blurb' parameter (w/ or w/o value)
+
+        if (/^\s*dyk-blurb\s*$/i) {
+            $dykblurb = 1;
+        }
+
+        if (/^\s*dyk-blurb\s*=\s*(\d+)\s*$/i) {
+            $dykblurb = $1;
+        }
+
+        # look for 'italics' parameter
+
+        if (/^\s*italics\s*$/i) {
+            $italicize = 1;
+        }
+
+    }
+
+    # validate parameters
+
+    my @errors;
+
+    unless (scalar keys %$project) {
+        push @errors, 'No template or category parameter found';
+    }
+
+    unless (scalar @types > 0) {
+        push @errors, 'No content type parameters found';
+    }
+
+    for (@types) {
+        unless (exists $sources{$_}) {
+            push @errors, "Unknown content type found -> $_";
+        }
+    }
+
+    if ( ($columns !~ /^\d+$/) and ($columns !~ /^\d+em$/) ) {
+        push @errors, "Column parameter is not a valid value [$columns]";
+    }
+
+    if ( ($heading != 100) and ($heading != 0) and ( ($heading lt 2) or ($heading gt 6) ) ) {
+        push @errors, "Heading is not a valid level (2-6) [$heading]";
+    }
+
+    if ( ($sorting ne 'default') and ($sorting ne 'alpha') and ($sorting ne 'date-default') and ($sorting ne 'date-alpha') ) {
+        push @errors, "Sorting not a valid option (default, alpha, date-default, date-alpha) [$sorting]";
+    }
+
+    if ( ($dateOrder ne 'increasing') and ($dateOrder ne 'decreasing') ) {
+        push @errors, "Date-Order not a valid option (increasing, decreasing) [$dateOrder]\n";
+    }
+
+    if (@errors) {
+        print "  parameter errors:\n";
+        my $output = "Project Content template contains the following errors:\n";
+        for my $line (@errors) {
+            $output .= "* $line\n";
+            print "  - $line\n";
+        }
+        $output .= "Unable to generate results. See [[User:JL-Bot/Project content|documentation]] for help\n";
+        saveResults($bot, $page, $output);
+        return 'ERROR';
+    }
+
+    # convert heading if default
+
+    $heading = 2 if ($heading eq 100);
+
+    # print parameters
+
+    print "  project       = " . (join "\n                  ", (sort keys %$project)) . "\n";
+    print "  types         = " . (join "\n                  ", @types) . "\n";
+
+    if (scalar keys %$aClass) {
+        print "  aClass        = " . (join "\n                  ", (sort keys %$aClass)) . "\n";
+    }
+
+    if (scalar keys %$bClass) {
+        print "  bClass        = " . (join "\n                  ", (sort keys %$bClass)) . "\n";
+    }
+
+    if (scalar keys %$cClass) {
+        print "  cClass        = " . (join "\n                  ", (sort keys %$cClass)) . "\n";
+    }
+
+    print "  columns       = $columns\n" if ($columns);
+    print "  icons page    = $iconsPage\n" if ($iconsPage);
+    print "  icons heading = $iconsHeading\n" if ($iconsHeading);
+    print "  compact       = $compact\n" if ($compact);
+    print "  heading       = $heading\n" if ($heading);
+    print "  noheading     = $noheading\n" if ($noheading);
+    print "  pictures      = $pictures\n" if ($pictures);
+    print "  maximum       = $maximum\n" if ($maximum);
+    print "  sorting       = $sorting\n" if ($sorting);
+    print "  dates         = $dates\n" if ($dates);
+    print "  date order    = $dateOrder\n" if ($dateOrder);
+    print "  display total = $displayTotal\n" if ($displayTotal);
+    print "  overflow DYK  = $overflowDYK\n" if ($overflowDYK);
+    print "  overflow FA   = $overflowFA\n" if ($overflowFA);
+    print "  overflow GA   = $overflowGA\n" if ($overflowGA);
+    print "  overflow A    = $overflowA\n" if ($overflowA);
+    print "  overflow B    = $overflowB\n" if ($overflowB);
+    print "  overflow C    = $overflowC\n" if ($overflowC);
+    print "  overflow V1   = $overflowV1\n" if ($overflowV1);
+    print "  overflow V2   = $overflowV2\n" if ($overflowV2);
+    print "  overflow V3   = $overflowV3\n" if ($overflowV3);
+    print "  overflow V4   = $overflowV4\n" if ($overflowV4);
+    print "  overflow V5   = $overflowV5\n" if ($overflowV5);
+    print "  small         = $small\n" if ($small);
+    print "  dyk-blurb     = $dykblurb\n" if ($dykblurb);
+    print "  italics       = $italicize\n" if ($italicize);
+    print "\n";
+
+    # store parameters
+
+    my $parameters;
+
+    $parameters->{project}      = $project;
+    $parameters->{types}        = \@types;
+    $parameters->{aClass}       = $aClass;
+    $parameters->{bClass}       = $bClass;
+    $parameters->{cClass}       = $cClass;
+    $parameters->{columns}      = $columns;
+    $parameters->{iconsPage}    = $iconsPage;
+    $parameters->{iconsHeading} = $iconsHeading;
+    $parameters->{compact}      = $compact;
+    $parameters->{heading}      = $heading;
+    $parameters->{noheading}    = $noheading;
+    $parameters->{pictures}     = $pictures;
+    $parameters->{maximum}      = $maximum;
+    $parameters->{sorting}      = $sorting;
+    $parameters->{dates}        = $dates;
+    $parameters->{dateOrder}    = $dateOrder;
+    $parameters->{displayTotal} = $displayTotal;
+    $parameters->{overflowDYK}  = $overflowDYK;
+    $parameters->{overflowFA}   = $overflowFA;
+    $parameters->{overflowGA}   = $overflowGA;
+    $parameters->{overflowA}    = $overflowA;
+    $parameters->{overflowB}    = $overflowB;
+    $parameters->{overflowC}    = $overflowC;
+    $parameters->{overflowV1}   = $overflowV1;
+    $parameters->{overflowV2}   = $overflowV2;
+    $parameters->{overflowV3}   = $overflowV3;
+    $parameters->{overflowV4}   = $overflowV4;
+    $parameters->{overflowV5}   = $overflowV5;
+    $parameters->{small}        = $small;
+    $parameters->{dykblurb}     = $dykblurb;
+    $parameters->{italicize}    = $italicize;
+
+    return $parameters;
+}
+
+sub getContent {
+
+    # This subroutine retrieves applicable content from a source.   It is passed
+    # the bot and the source.  It returns a hash ref with the content.
+
+    my $bot    = shift;
+    my $source = shift;
+
+    my $members;    # hash ref to hold query results
+
+    if ($source =~ /^Category:/) {
+        print "  Retrieving members of $source ... ";
+        $members = $bot->getCategoryMembers($source, '1|5|6|7|101');
+        print scalar(keys %$members) . "\n";
+    }
+    elsif ($source =~ /^Template:/) {
+        print "  Retrieving transclusions of $source ... ";
+        $members = $bot->getTransclusions($source, '1|5|6|7|101');
+        print scalar(keys %$members) . "\n";
+    }
+    else {
+        die "ERROR: Unknown source type! --> $source\n\n";
+    }
+
+    return $members;
+}
+
+sub findTemplates {
+
+    # This subroutine finds a template in a text string.  It is passed the text
+    # and returns an array reference containing the templates.
+
+    my $text = shift;
+
+    # the following code is based on perlfaq6's "Can I use Perl regular
+    # expressions to match balanced text?" example
+
+    my $regex = qr/
+        (                       # start of bracket 1
+            \{\{                # match an opening template
+                (?:
+                    [^{}]++     # one or more non brackets, non backtracking
+                    |
+                    (?1)        # recurse to bracket 1
+                )*
+            \}\}                # match a closing template
+        )                       # end of bracket 1
+    /x;
+
+    my @queue   = ( $text );
+    my @templates = ();
+
+    while( @queue ) {
+        my $string = shift @queue;
+        my @matches = $string =~ m/$regex/go;
+        @templates = (@templates, @matches);
+        unshift @queue, map { s/^\{\{//; s/\}\}$//; $_ } @matches;
+    }
+
+    return \@templates;
+}
+
+sub parseDYKBlurb {
+
+    # This function parses the DYK blurb
+
+    my $text = shift;
+    my $page = shift;
+    my $talk = shift;
+
+    my $blurb;
+
+    my $templates = findTemplates($text);
+
+    # find first {{dyk talk}} template found
+
+    for my $template (@$templates) {
+        if ($template =~ /^\{\{\s*(?:Template:\s*)?dyk\s*talk/i) {
+
+            if ($template =~ /^\{\{\s*(?:Template:\s*)?dyk\s*talk\s*\|.*?\|\s*entry\s*=\s*(.+)\}\}$/ims) {
+                $blurb = $1;
+            }
+            elsif ($template =~ /^\{\{\s*(?:Template:\s*)?dyk\s*talk\s*\|[^\|]+\|(?:\s*\d+\s*\|)?\s*(.+)\}\}$/ims) {
+                $blurb = $1;
+            }
+
+            if ($blurb) {
+
+                # remove new lines
+                $blurb =~ s/\n//g;
+
+                # strip off excess fields
+                $blurb =~ s/\s*\|\s*article\s*=[^\|]+//;
+                $blurb =~ s/\s*\|\s*image\s*=[^\|]+//;
+                $blurb =~ s/\s*\|\s*nompage\s*=[^\|]+//;
+                $blurb =~ s/\s*\|\s*views\s*=[^\|]+//;
+                $blurb =~ s/\s*\|\s*small\s*=[^\|]+//;
+                $blurb =~ s/\{\{\s*\*\s*mp\s*\}\}//;
+                $blurb =~ s/<!--.*?-->//;
+
+                # if only year returned, then no blurb was provided
+                $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>" if ($blurb =~ /^\d+$/);
+
+            }
+            else {
+                $blurb = $page;
+                $dyktalk->{$talk} = 1;
+            }
+
+            last;
+        }
+    }
+
+    # parse {{article history}} if not {{dyk talk}}
+
+    unless ($blurb) {
+
+        for my $template (@$templates) {
+            if ($template =~ /^\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones)/i) {
+
+                $template =~ /\|\s*dykentry\s*=\s*(.*?)\s*$/ims;
+                $blurb = $1;
+
+                if ($blurb) {
+
+                    # remove new lines
+                    $blurb =~ s/\n//g;
+
+                    # strip off excess fields
+                    $blurb =~ s/\s*\|\s*action\d.*$//;
+                    $blurb =~ s/\s*\|\s*action\ddate.*$//;
+                    $blurb =~ s/\s*\|\s*action\dlink.*$//;
+                    $blurb =~ s/\s*\|\s*action\dresult.*$//;
+                    $blurb =~ s/\s*\|\s*action\doldid.*$//;
+                    $blurb =~ s/\s*\|\s*currentstatus.*$//;
+                    $blurb =~ s/\s*\|\s*itndate.*$//;
+                    $blurb =~ s/\s*\|\s*dykdate.*$//;
+                    $blurb =~ s/\s*\|\s*topic.*$//;
+                    $blurb =~ s/\s*\|\s*small.*$//;
+                    $blurb =~ s/\s*\|\s*sm.*$//;
+                    $blurb =~ s/\s*\|\s*nompage\s*=[^\|]+//;
+                    $blurb =~ s/\{\{\s*\*\s*mp\s*\}\}//;
+                    $blurb =~ s/<!--.*?-->//;
+
+                }
+
+                unless ($blurb) {
+                    # cannot use else as 'dykentry=' may be present with no content
+                    $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>";   # don't record error as likely dykentry not entered
+                }
+
+                last;
+            }
+        }
+
+    }
+
+    # if no blurb, then matching template not found
+
+    unless ($blurb) {
+        $blurb = 'NONE';
+    }
+
+    return $blurb
+}
+
+sub parseVital {
+
+    # This function parses the talk page for the vital class
+
+    my $text = shift;
+    my $talk = shift;
+
+    my $result = 'NONE';
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va\s*\|)/is) {
+        if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va)\s*\|.*?class\s*=\s*(.+?)[\|\}]/ims) {
+            my $class = $1;
+            $result = $class;
+        }
+        else {
+            $result = 'MISSING';
+            $vital->{$talk} = 1;
+        }
+
+    }
+
+    return $result;
+}
+
+sub parseDYKDates {
+
+    # This function parses the talk page for the DYK date
+
+    my $text = shift;
+    my $talk = shift;
+
+    my $result = 'NONE';
+
+    # look for DYK talk first
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?dyk\s*talk/ims) {
+        if ($text =~ /\{\{\s*(?:Template:\s*)?dyk\s*talk\s*\|\s*(?:\[\[\s*)?([\w\d\s,]+)(?:\]\]\s*)?\s*(?:\||\s)\s*(?:\[\[\s*)?(\d+)/ims) {
+            my $date = $1;
+            my $year = $2;
+
+            if ( ($date) and ($year) ) {
+                my $ezdate = Date::EzDate->new("$date $year");
+                $result = $ezdate->{'%Y-%m-%d'};
+            }
+            else {
+                $result = '0000-00-00';
+                $dyktalk->{$talk} = 1;
+            }
+        }
+        else {
+            $result = '0000-00-00';
+            $dyktalk->{$talk} = 1;
+        }
+    }
+
+    # look for article history second
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*dykdate\s*=\s*(?:\[\[\s*)?([\w\d\s,\-]+)/ims) {
+        my $date = $1;
+
+        if ($date) {
+            my $ezdate = Date::EzDate->new($date);
+            $result = $ezdate->{'%Y-%m-%d'};
+        }
+        else {
+            $result = '0000-00-00';
+            $articlehistory->{$talk} = 1;
+        }
+    }
+
+    return $result;
+}
+
+sub parseMainPageNews {
+
+    # This function parses the talk page for the main page in the news date
+    # It looks for ITN Talk first and then Article History (with itndate parameter)
+
+    my $text = shift;
+    my $talk = shift;
+
+    my $result = 'NONE';
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?itn\s*talk\s*\|(.*?)\}\}/ims) {
+
+        my $parameters = $1;
+        my $date = 0;
+
+        if ($parameters =~ /date1?\s*=\s*([,\w\d\s]+)\s*(?:\|.*)?$/) {
+
+            # ITN talk|date=
+            $date = $1;
+        }
+        elsif ($parameters =~ /^\s*([\w\d,]+)\s*(?:\|\s*)?([\w\d,]+)\s*\|\s*(\d+)\s*(?:\|.*)?$/) {
+
+            # ITN talk|dd|mm|year
+            # ITN talk|dd mm|year
+            $date = "$1 $2 $3";
+        }
+
+        my $ezdate = Date::EzDate->new($date);
+        $result = $ezdate->{'%Y-%m-%d'};
+
+        unless ($result) {
+            $result = '0000-00-00';
+            $itntalk->{$talk} = 1;
+        }
+
+    }
+    elsif ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*itndate\s*=\s*(?:\[\[\s*)?([\w\d\s,]+)/ims) {
+        my $date = $1;
+
+        if ($date) {
+            my $ezdate = Date::EzDate->new($date);
+            $result = $ezdate->{'%Y-%m-%d'};
+        }
+        else {
+            $result = '0000-00-00';
+            $articlehistory->{$talk} = 1;
+        }
+
+    }
+
+    return $result;
+}
+
+sub parseMainPageFeatured {
+
+    # This function parses the talk page for the main page featured date
+
+    my $text = shift;
+    my $talk = shift;
+
+    my $result = 'NONE';
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*maindate\s*=\s*(?:\[\[\s*)?([\w\d\s,-]+)/ims) {
+        my $date = $1;
+
+        if ($date) {
+            my $ezdate = Date::EzDate->new($date);
+            $result = $ezdate->{'%Y-%m-%d'};
+        }
+        else {
+            $result = '0000-00-00';
+            $articlehistory->{$talk} = 1;
+        }
+    }
+
+    return $result;
+}
+
+sub parsePictureDay {
+
+    # This function parses the talk page for the picture of the day date
+
+    my $text = shift;
+    my $page = shift;
+
+    my $result = 'NONE';
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?picture\s*of\s*the\s*day/ims) {
+
+        $text =~ /\{\{\s*(?:Template:\s*)?picture\s*of\s*the\s*day\s*\|\s*(?:\[\[\s*)?([\w\d\s,-]+)[\|}]/ims;
+        my $date = $1;
+
+        if ($date) {
+            my $ezdate = Date::EzDate->new($date);
+            $result = $ezdate->{'%Y-%m-%d'};
+        }
+        else {
+            $result = '0000-00-00';
+            $pictureoftheday->{$page} = 1;
+        }
+
+    }
+
+    return $result;
+}
+
+sub getPageInfo {
+
+    # This function parses talk page templates to find relevant information.
+    # It is designed so that a talk page only has to be retrieved once.
+
+    my $bot  = shift;
+    my $page = shift;
+
+    my $talk = "Talk:$page";
+    $talk =~ s/^Talk:File:/File talk:/;
+    $talk =~ s/^Talk:Portal:/Portal talk:/;
+    $talk =~ s/^Talk:Wikipedia:/Wikipedia talk:/;
+
+    my ($text, ) = $bot->getText($talk);
+
+    my $info;   # hash ref to contain talk info
+
+    # parse vital class
+
+    $info->{vital} = parseVital($text, $talk);
+
+    # parse date types
+
+    $info->{date}->{'content-did-you-know-articles'} = parseDYKDates($text, $talk);
+    $info->{date}->{'content-mainpage-in-the-news'} = parseMainPageNews($text, $talk);
+    $info->{date}->{'content-mainpage-featured'} = parseMainPageFeatured($text, $talk);
+    $info->{date}->{'content-mainpage-lists'} = $info->{date}->{'content-mainpage-featured'};
+
+    # dyk blurb
+
+    $info->{blurb} = parseDYKBlurb($text, $page, $talk);
+
+    # picture date (separate as template is on picture page, not talk)
+
+    $info->{date}->{'content-picture-of-the-day'} = 'NONE';
+
+    if ($page =~ /^File:/) {
+        ($text, ) = $bot->getText($page);
+        $info->{date}->{'content-picture-of-the-day'} = parsePictureDay($text, $talk);
+    }
+
+    return $info;
+}
+
+sub saveResults {
+
+    # This function saves the output to the page.
+
+    my $bot    = shift;
+    my $page   = shift;
+    my $output = shift;
+
+    # replace existing content
+
+    my ($text, $timestamp) = $bot->getText($page);
+    my $old  = $text;
+
+    my $check = $text =~ s/$header.+$footer/$header\n$output$footer/ms;
+
+    unless ($check) {
+        # header & footer not present so go after template
+        $check = $text =~ s/(\{\{\s*User:JL-Bot\/Project[\s_]content(?:\n|\s|\|)[^}]+\n?\}\})/$1\n$header\n$output$footer/ms;
+        unless ($check) {
+            die "\nCould not insert output into page text!\n\n";
+        }
+    }
+
+    $text =~ s/\n\n+$footer/\n$footer/ms;
+
+    if ($text ne $old) {
+        print "\nSaving results to \'$page\' ...\n\n";
+        $bot->saveText($page, $timestamp, $text, 'updating recognized content', 'NotMinor', 'Bot');
+    }
+    else {
+        print "\nNot saving results as no change.\n\n";
+    }
+
+    return;
+}
+
+sub italicizePage {
+
+    # Apply italic formatting to page title
+
+    my $page = shift;
+
+    my $title = "''$page''";
+    $title =~ s/( \(.+\))''/'' $1/;     # change ''one (two)'' to ''one'' (two)
+
+    return "[[:$page|$title]]"
+}
+
+#
+# Main
+#
+
+# command line options
+
+my %opts;
+getopts('htp:s:', \%opts);
+
+if ($opts{h}) {
+    print "usage: wiki-bot-content [-ht] [-p page]\n";
+    print "       where: -h = help\n";
+    print "              -t = test mode (operate against test pages only)\n";
+    print "              -p = process specific page only\n";
+    print "              -s = starting page\n";
+    exit;
+}
+
+my $tFlag = $opts{t} ? 1 : 0;             # test mode (operate against test pages only)
+my $pFlag = $opts{p} ? $opts{p} : 0;      # specify page to process
+my $sFlag = $opts{s} ? $opts{s} : 0;      # specify starting page
+
+# handle UTF-8
+
+binmode(STDOUT, ':utf8');
+binmode(STDERR, ':utf8');
+
+# auto-flush output
+
+$| = 1;
+
+# capture interrupt
+
+$SIG{'INT'} = sub {
+    print "\n";
+    exit;
+};
+
+# initialize bot
+
+my $bot = mybot->new($botinfo);
+
+# italics titles
+
+print "\nRetrieving italic titles ...\n\n";
+my $italics = $bot->getTransclusions('Template:Italic title');
+
+# algorithm:
+# find pages transcluding bot template
+# for each page transcluding bot template
+# -- retrieve parameters (skip if none, error message if incorrect)
+# -- retrieve pages in the category types requested (if not retrieved already)
+# -- retrieve pages in the project (if not retrieved already)
+# -- find overlap
+# -- output results
+
+# find pages transcluding bot template
+
+print "Retrieving transclusions of $template ...\n\n";
+my $toUpdate = $bot->getTransclusions($template, '2|3|4|5|100|101|108|109');
+
+if (scalar(keys %$toUpdate) == 0) {
+    die "\nNo pages transclude \'$template\'.\n\n";
+}
+
+# set-up test mode if specified
+
+if ($tFlag) {
+    for my $update (keys %$toUpdate) {
+        delete $toUpdate->{$update} unless ($update =~ m|^User:JL-Bot/|);
+    }
+}
+
+# set-up specific page mode if specified
+
+if ($pFlag) {
+    for my $update (keys %$toUpdate) {
+        delete $toUpdate->{$update} unless ($update eq $pFlag);
+    }
+}
+
+# set-up starting page mode if specified
+
+if ($sFlag) {
+    for my $update (keys %$toUpdate) {
+        delete $toUpdate->{$update} unless ($update ge $sFlag);
+    }
+}
+
+# iterate across pages transcluding bot template
+
+my $retrieved;      # hash ref to hold retrieved pages by source
+my $sortDefault;    # hash ref to hold default sort values
+my $pageInfo;       # hash ref to hold page information
+
+for my $update (sort keys %$toUpdate) {
+
+    print "Processing \'$update\' ...\n\n";
+
+    my $parameters = getParameters($bot, $update);
+
+    next if ($parameters eq 'NONE');
+    next if ($parameters eq 'ERROR');
+
+    # parameters
+
+    my $project      = $parameters->{project};
+    my $types        = $parameters->{types};
+    my $aClass       = $parameters->{aClass};
+    my $bClass       = $parameters->{bClass};
+    my $cClass       = $parameters->{cClass};
+    my $columns      = $parameters->{columns};
+    my $iconsPage    = $parameters->{iconsPage};
+    my $iconsHeading = $parameters->{iconsHeading};
+    my $compact      = $parameters->{compact};
+    my $heading      = $parameters->{heading};
+    my $noheading    = $parameters->{noheading};
+    my $pictures     = $parameters->{pictures};
+    my $maximum      = $parameters->{maximum};
+    my $sorting      = $parameters->{sorting};
+    my $dates        = $parameters->{dates};
+    my $dateOrder    = $parameters->{dateOrder};
+    my $displayTotal = $parameters->{displayTotal};
+    my $overflowDYK  = $parameters->{overflowDYK};
+    my $overflowFA   = $parameters->{overflowFA};
+    my $overflowGA   = $parameters->{overflowGA};
+    my $overflowA    = $parameters->{overflowA};
+    my $overflowB    = $parameters->{overflowB};
+    my $overflowC    = $parameters->{overflowC};
+    my $overflowV1   = $parameters->{overflowV1};
+    my $overflowV2   = $parameters->{overflowV2};
+    my $overflowV3   = $parameters->{overflowV3};
+    my $overflowV4   = $parameters->{overflowV4};
+    my $overflowV5   = $parameters->{overflowV5};
+    my $small        = $parameters->{small};
+    my $dykblurb     = $parameters->{dykblurb};
+    my $italicize    = $parameters->{italicize};
+
+    # retrieve pages in the content types requested
+
+    my $got = 0;
+    for my $type (sort @$types) {
+        next if ($type eq 'content-a-class-articles');      # handled separately
+        next if ($type eq 'content-b-class-articles');      # handled separately
+        next if ($type eq 'content-c-class-articles');      # handled separately
+        next if (exists $retrieved->{$type});               # don't re-retrieve
+        for my $source (sort keys %{ $sources{$type} }) {
+            my $members = getContent($bot, $source);
+            $got = 1;
+            for my $page (keys %$members) {
+                $retrieved->{$type}->{$page} = 1;
+            }
+        }
+    }
+
+    # retrieve a-class sources requested
+    # -- should just include all w/o doing overlap, but don't feel like re-writing overlap section
+
+    delete $retrieved->{'content-a-class-articles'} if (exists $retrieved->{'content-a-class-articles'});
+    for my $source (sort keys %$aClass) {
+        my $members = getContent($bot, $source);
+        $got = 1;
+        for my $page (keys %$members) {
+            $retrieved->{'content-a-class-articles'}->{$page} = 1;
+        }
+    }
+
+    # retrieve b-class sources requested
+    # -- should just include all w/o doing overlap, but don't feel like re-writing overlap section
+
+    delete $retrieved->{'content-b-class-articles'} if (exists $retrieved->{'content-b-class-articles'});
+    for my $source (sort keys %$bClass) {
+        my $members = getContent($bot, $source);
+        $got = 1;
+        for my $page (keys %$members) {
+            $retrieved->{'content-b-class-articles'}->{$page} = 1;
+        }
+    }
+
+    # retrieve c-class sources requested
+    # -- should just include all w/o doing overlap, but don't feel like re-writing overlap section
+
+    delete $retrieved->{'content-c-class-articles'} if (exists $retrieved->{'content-c-class-articles'});
+    for my $source (sort keys %$cClass) {
+        my $members = getContent($bot, $source);
+        $got = 1;
+        for my $page (keys %$members) {
+            $retrieved->{'content-c-class-articles'}->{$page} = 1;
+        }
+    }
+    print "\n" if ($got);
+
+    # retrieve project sources requested
+
+    $got = 0;
+    for my $source (sort keys %$project) {
+        next if (exists $retrieved->{$source});             # don't re-retrieve
+        my $members = getContent($bot, $source);
+        $got = 1;
+        for my $page (keys %$members) {
+            $retrieved->{$source}->{$page} = 1;
+        }
+    }
+    print "\n" if ($got);
+
+    # combine members of project's templates & categories
+
+    my $members = {};
+    for my $source (keys %$project) {
+        if (scalar keys %{$retrieved->{$source}}) {         # ensure results were found
+            $members = { %$members, %{$retrieved->{$source}} };
+        }
+    }
+
+    # find overlap
+
+    my $results;      # hash ref to hold results by type
+
+    for my $type (@$types) {
+
+        print "  $type ... ";
+
+        my $dbtotal = scalar keys %$members;
+        my $dbtotalLen = length($dbtotal);
+
+        my $dbcount = 0;
+        my $dbcountLen = 0;
+
+        for my $talk (keys %$members) {
+
+            $dbcount++;
+
+            $talk =~ s/^File talk:/File:/;            # files are in category by main name, not talk
+
+            if ((exists $retrieved->{$type}) and (exists $retrieved->{$type}->{$talk})) {
+
+                # handle FF -> F problems
+                # double exists required to avoid creating first level hash when checking for second level entry
+
+                if ($type eq 'content-former-featured-articles') {
+                    next if ((exists $retrieved->{'content-featured-articles'}) and (exists $retrieved->{'content-featured-articles'}->{$talk}));
+                }
+
+                if ($type eq 'content-former-featured-lists') {
+                    next if ((exists $retrieved->{'content-featured-lists'}) and (exists $retrieved->{'content-featured-lists'}->{$talk}));
+                }
+
+                if ($type eq 'content-former-good-articles') {
+                    next if ((exists $retrieved->{'content-good-articles'}) and (exists $retrieved->{'content-good-articles'}->{$talk}));
+                }
+
+                if ($type eq 'content-former-featured-pictures') {
+                    next if ((exists $retrieved->{'content-featured-pictures'}) and (exists $retrieved->{'content-featured-pictures'}->{$talk}));
+                }
+
+                if ($type eq 'content-former-featured-portals') {
+                    next if ((exists $retrieved->{'content-featured-portals'}) and (exists $retrieved->{'content-featured-portals'}->{$talk}));
+                }
+
+                if ($type eq 'content-former-featured-topics') {
+                    next if ((exists $retrieved->{'content-featured-topics'}) and (exists $retrieved->{'content-featured-topics'}->{$talk}));
+                }
+
+                print "$dbcount of $dbtotal";
+
+                $dbcountLen = length($dbcount);
+                print "\b" x ($dbcountLen + $dbtotalLen + 4);
+
+                # find non-talk page name
+
+                my $page = $talk;
+                $page =~ s/^Talk://;
+                $page =~ s/^(\w+) talk:/$1:/;
+
+                # determine sorting
+
+                my $sort;
+
+                if ( ($sorting eq 'alpha') or ( ($sorting eq 'date-alpha') and (not exists $dateTypes{$type}) ) ) {
+                    $sort = $page;
+                }
+                elsif ( ($sorting eq 'default') or ( ($sorting eq 'date-default') and (not exists $dateTypes{$type}) ) ) {
+                    $sortDefault->{$page} = $bot->getDefaultSort($page) unless (exists $sortDefault->{$page});
+                    $sort = $sortDefault->{$page} . " : $page";         # can be multiple pages with same DEFAULTSORT setting
+                }
+                elsif ( ($sorting =~ /^date-/) and (exists $dateTypes{$type}) ) {
+                    $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                    $sort = $pageInfo->{$page}->{date}->{$type} . " : $page";   # can be multiple pages for same day
+                }
+                else {
+                    die "ERROR: Unknown sorting type!\n";
+                }
+
+                # save
+
+                $results->{$type}->{$sort} = $page;
+
+            }
+
+        }
+
+        print " " x ($dbcountLen + $dbtotalLen + 4);
+        print "\n";
+
+    }
+
+    # output results
+
+    my $output;
+
+    my $level = "";
+    if ($heading) {
+        $level = "=" x $heading;
+    }
+
+    for my $type (@$types) {
+
+        # only output if results found
+
+        if (ref $results->{$type} eq "HASH") {
+
+            unless ($noheading) {
+                $output .= ";" unless ($heading);
+                $output .= $level;
+                $output .= $icons{$type} . " " if ($iconsHeading);
+                $output .= $sections{$type}. $level . "\n";
+            }
+
+            if ( ($type !~ /picture/) or ($pictures) ) {
+
+                # non-media or pictures-list flag set
+
+                my $total = scalar(keys %{$results->{$type}});
+                my $count = 0;
+
+                $output .= "<small>\n" if (($small) and ($compact));
+                if ( ($columns) and (not $compact) ) {
+                    $output .= "\{\{columns-list|colwidth=30em|\n" if ($columns =~ /^\d+$/);        # default to three columns for deprecated parameter
+                    $output .= "\{\{columns-list|colwidth=$columns|\n" if ($columns =~ /^\d+em$/);
+                }
+
+                # determine sort order
+
+                my @order;
+
+                if (($sorting =~ /^date/) and (exists $dateTypes{$type}) and ($dateOrder eq "decreasing") ) {
+                    @order = rnatsort keys %{$results->{$type}};
+                }
+                else {
+                    @order = natsort keys %{$results->{$type}};
+                }
+
+                # output each page
+
+                my $noinclude = 0;
+                my $dykseen;
+
+                for my $sort (@order) {
+
+                    $count++;
+
+                    my $page = $results->{$type}->{$sort};
+
+                    $page =~ s/^Wikipedia:Featured topics\/(.+)$/Wikipedia:Featured topics\/$1\|$1/;
+
+                    my $listing = "[[:$page]]";
+                    $listing = italicizePage($page) if (($italicize) and (exists $italics->{$page}));
+
+                    if (($dykblurb) and ($type eq 'content-did-you-know-articles')) {
+                        $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                        $listing = $pageInfo->{$page}->{blurb};
+                        if ($dykseen->{$listing}) {
+
+                            # when two pages have the same dyk skip it
+                            $count--;
+                            next;
+                        }
+                        $dykseen->{$listing} = 1;
+                        if (($dykblurb > 1) and ($count > $dykblurb) and (not $noinclude)) {
+                            $output .= "<noinclude>\n";
+                            $noinclude = 1;
+                        }
+                    }
+
+                    if ($compact) {
+                        next if ( ($maximum) and ($count > $maximum) );
+                        if (($iconsPage) and ($type =~ /content-vital-articles-level/)) {
+                            # output vital article icons even in compact
+                            $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                            $output .= "{{icon|" . $pageInfo->{$page}->{vital} . "}} ";
+                        }
+                        $output .= $listing;
+                        if (($dates) and (exists $dateTypes{$type})) {
+                            $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                            $sort = $pageInfo->{$page}->{date}->{$type};
+                            $output .= " <small>($sort)</small>"
+                        }
+                        $output .= " •\n";
+                    }
+                    else {
+                        if ($iconsPage) {
+                            if ($type =~ /content-vital-articles-level/) {
+                                $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                                $output .= "* {{icon|" . $pageInfo->{$page}->{vital} . "}} $listing";
+                            }
+                            else {
+                                $output .=  "*" . $icons{$type} . " $listing";
+                            }
+                            if (($dates) and (exists $dateTypes{$type})) {
+                                $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                                $sort = $pageInfo->{$page}->{date}->{$type};
+                                $output .= " <small>($sort)</small>"
+                            }
+                            $output .= "\n";
+                        }
+                        else {
+                            $output .=  "*$listing";
+                            if (($dates) and (exists $dateTypes{$type})) {
+                                $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                                $sort = $pageInfo->{$page}->{date}->{$type};
+                                $output .= " <small>($sort)</small>"
+                            }
+                            $output .= "\n";
+                        }
+                    }
+
+                }
+
+                $output =~ s/ •$/\n/ if ($compact);
+
+                if ($type eq 'content-did-you-know-articles') {
+                    if (($dykblurb > 1) and ($count > $dykblurb)) {
+                        $output .= "</noinclude>\n";
+                    }
+                }
+
+                if ( ($compact) and ($maximum) and ($count > $maximum) ) {
+                    $output .= "Reached maximum of $maximum out of $count";
+                    $output .= " <small>([[$overflowDYK|full list]])</small>" if (($overflowDYK) and ($type eq 'content-did-you-know-articles'));
+                    $output .= " <small>([[$overflowFA|full list]])</small>" if (($overflowFA) and ($type eq 'content-featured-articles'));
+                    $output .= " <small>([[$overflowGA|full list]])</small>" if (($overflowGA) and ($type eq 'content-good-articles'));
+                    $output .= " <small>([[$overflowA|full list]])</small>" if (($overflowA) and ($type eq 'content-a-class-articles'));
+                    $output .= " <small>([[$overflowB|full list]])</small>" if (($overflowB) and ($type eq 'content-b-class-articles'));
+                    $output .= " <small>([[$overflowC|full list]])</small>" if (($overflowC) and ($type eq 'content-c-class-articles'));
+                    $output .= " <small>([[$overflowV1|full list]])</small>" if (($overflowV1) and ($type eq 'content-vital-articles-level-1'));
+                    $output .= " <small>([[$overflowV2|full list]])</small>" if (($overflowV2) and ($type eq 'content-vital-articles-level-2'));
+                    $output .= " <small>([[$overflowV3|full list]])</small>" if (($overflowV3) and ($type eq 'content-vital-articles-level-3'));
+                    $output .= " <small>([[$overflowV4|full list]])</small>" if (($overflowV4) and ($type eq 'content-vital-articles-level-4'));
+                    $output .= " <small>([[$overflowV5|full list]])</small>" if (($overflowV5) and ($type eq 'content-vital-articles-level-5'));
+                    $output .= "\n";
+                }
+
+                $output .= "}}\n" if ( ($columns) and (not $compact) );
+                $output .= "</small>\n" if (($small) and ($compact));
+                $output .= "Total pages in content type is $total\n" if (($displayTotal) and (not (($compact) and ($maximum))));
+
+                if ($type eq 'content-did-you-know-articles') {
+                    if (($dykblurb > 1) and ($count > $dykblurb)) {
+                        $output .= "<includeonly>Transcluding $dykblurb of $count total</includeonly>\n";
+                    }
+                }
+
+            }
+            else {
+
+                # media & pictures-list flag not set
+
+                my $total = scalar(keys %{$results->{$type}});
+
+                $output .= "<gallery>\n";
+
+                for my $sort (sort keys %{$results->{$type}}) {
+                    my $page = $results->{$type}->{$sort};
+                    $output .= "$page|$page";
+                    if (($dates) and (exists $dateTypes{$type})) {
+                        $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
+                        $sort = $pageInfo->{$page}->{date}->{$type};
+                        $output .= " <small>($sort)</small>"
+                    }
+                    $output .= "\n";
+                }
+
+                $output .= "</gallery>\n\n";
+                $output .= "Total pages in content type is $total\n\n" if ($displayTotal);
+
+            }
+
+        }
+
+    }
+
+    # in case no results
+
+    unless ($output) {
+        print "\nNo results were found!\n";
+        $output = "No results were found.\n";
+    }
+
+    saveResults($bot, $update, $output);
+}
+
+# output errors
+
+if (scalar keys %$articlehistory) {
+    print "Pages with articlehistory errors:\n  " . (join "\n  ", (sort keys %$articlehistory)) . "\n\n";
+}
+
+if (scalar keys %$dyktalk) {
+    print "Pages with dyktalk errors:\n  " . (join "\n  ", (sort keys %$dyktalk)) . "\n\n";
+}
+
+if (scalar keys %$itntalk) {
+    print "Pages with itntalk errors:\n  " . (join "\n  ", (sort keys %$itntalk)) . "\n\n";
+}
+
+if (scalar keys %$pictureoftheday) {
+    print "Pages with pictureoftheday errors:\n  " . (join "\n  ", (sort keys %$pictureoftheday)) . "\n\n";
+}
+
+if (scalar keys %$vital) {
+    print "Pages with vital errors:\n  " . (join "\n  ", (sort keys %$vital)) . "\n\n";
+}
