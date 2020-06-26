@@ -1,0 +1,615 @@
+#!/usr/bin/perl
+
+# This script generates the journal maintenance results (WP:JCW/MAINT).
+
+use warnings;
+use strict;
+
+use Benchmark;
+use File::Basename;
+
+use lib dirname(__FILE__) . '/../modules';
+
+use citations qw(
+    loadRedirects
+    normalizeCitation
+    setFormat
+);
+use citationsDB;
+use mybot;
+
+use utf8;
+
+#
+# Validate Environment Variables
+#
+
+unless (exists $ENV{'WIKI_CONFIG_DIR'}) {
+    die "ERROR: WIKI_CONFIG_DIR environment variable not set\n";
+}
+
+unless (exists $ENV{'WIKI_WORKING_DIR'}) {
+    die "ERROR: WIKI_WORKING_DIR environment variable not set\n";
+}
+
+#
+# Configuration & Globals
+#
+
+my $DBPARSE      = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-titles.sqlite3';
+my $DBINDIVIDUAL = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-individual.sqlite3';
+my $DBMAINTAIN   = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-maintenance.sqlite3';
+my $BOTINFO      = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
+
+my $FALSEPOSITIVES = 'User:JL-Bot/Citations.cfg';
+my $MAINTENANCE = 'User:JL-Bot/Maintenance.cfg';
+
+my $PATTERNMAX = 1000;
+
+my @TABLES = (
+    'CREATE TABLE capitalizations(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE spellings(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE patterns(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE revisions(type TEXT, revision TEXT)',
+);
+
+my $CAPITALIZATIONS = 'Template:R from miscapitalisation';
+my $SPELLINGS = 'Template:R from misspelling';
+
+
+#
+# Subroutines
+#
+
+sub articleCount {
+
+    # Find the unique article count.
+
+    my $database = shift;
+    my $type = shift;
+    my $citations = shift;
+
+    my $articles;
+
+    for my $citation (%$citations) {
+
+        my $sth = $database->prepare('
+            SELECT article
+            FROM citations
+            WHERE type = ?
+            AND citation = ?
+        ');
+        $sth->bind_param(1, $type);
+        $sth->bind_param(2, $citation);
+        $sth->execute();
+
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $article = $ref->{'article'};
+            $articles->{$article} = 1;
+        }
+
+    }
+
+    return scalar keys %$articles;
+}
+
+sub citationCount {
+
+    # Find the total citation count
+
+    my $citations = shift;
+
+    my $count = 0;
+
+    for my $citation (keys %$citations) {
+        $count += $citations->{$citation}->{'citation-count'};
+        unless ($citations->{$citation}->{'citation-count'}) {
+            print "\nCitation = $citation\n";
+            use Data::Dumper;
+            print Dumper($citations);
+            exit;
+        }
+    }
+
+    return $count;
+}
+
+sub retrieveMaintenance {
+
+    # Retrieve maintenance settings from wiki page.
+
+    my $info = shift;
+    my $page = shift;
+
+    print "  retrieving maintenance configuration ...\n";
+
+    my $bot = mybot->new($info);
+
+    my ($text, $timestamp, $revision) = $bot->getText($page);
+
+    my $maintenance;
+
+    for my $line (split "\n", $text) {
+
+        $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
+
+        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+            my $target     = $1;
+            my $additional = $2;
+
+            # see if exclusion type specified & capture
+            my $exclusion = 'none';
+            if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
+                $exclusion = $1;
+                if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
+                    warn "$target pattern has unknown exclude type $exclusion in $line\n";
+                    next;
+                }
+                $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
+            }
+
+            # pull out patterns
+
+            my @terms = split(/\|/, $additional);
+            for my $term (@terms) {
+                $term =~ s/^\d+\s*=\s*//;
+                if ($term =~ /\Q.*\E/) {
+                    $maintenance->{$target}->{'include'}->{$term} = $exclusion;
+                }
+                elsif ($term =~ /!/) {
+                    $maintenance->{$target}->{'exclude'}->{$term} = 1;
+                }
+                else {
+                    warn "Unknown pattern: $target --> [$term]\n";
+                }
+            }
+        }
+    }
+
+    return $maintenance, $revision;
+}
+
+sub findCapitalizationTargets {
+
+    # Finds the targets for capitalization processing
+
+    my $database = shift;
+    my $typos    = shift;
+
+    print "  finding capitalization targets ...\r";
+
+    my $results;
+
+    my $sth = $database->prepare('
+        SELECT citation, dFormat, target
+        FROM individuals
+        WHERE type = "journal"
+    ');
+    $sth->execute();
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $citation = $ref->{'citation'};
+        my $dFormat  = $ref->{'dFormat'};
+        my $target   = $ref->{'target'};
+        next if ($dFormat eq 'nonexistent');
+        next if ($dFormat eq 'nowiki');
+        $results->{$target}->{$citation} = 1;
+    }
+
+    print "                                                 \r";
+
+    return $results;
+}
+
+sub findSpellingTargets {
+
+    # Finds the targets of the spelling redirects
+
+    my $database = shift;
+    my $typos    = shift;
+
+    my $current = 0;
+    my $total = scalar keys %$typos;
+
+    my $results;
+
+    for my $typo (keys %$typos) {
+        $current++;
+        print "  finding $current of $total spelling targets ...\r";
+        my $sth = $database->prepare('SELECT target FROM titles WHERE title = ?');
+        $sth->bind_param(1, $typo);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $target = $ref->{'target'};
+            $results->{$target}->{$typo} = 1;
+        }
+    }
+
+    print "                                                 \r";
+
+    return $results;
+}
+
+sub formatTypoEntries {
+
+    # Format the entries field for typo output
+
+    my $citations = shift;
+
+    my $output;
+
+    for my $citation (sort keys %$citations) {
+        my $format = $citations->{$citation}->{'d-format'};
+        my $count = $citations->{$citation}->{'citation-count'};
+        my $articles = $citations->{$citation}->{'article-count'};
+        my $formatted = setFormat('display', $citation, $format);
+        $output .= "* $formatted ($count in $articles)\n";
+    }
+
+    return $output;
+}
+
+sub pageType {
+
+    # Returns the page type
+
+    my $database = shift;
+    my $title = shift;
+
+    my $sth = $database->prepare(q{
+        SELECT pageType
+        FROM titles
+        WHERE title = ?
+    });
+    $sth->bind_param(1, $title);
+    $sth->execute();
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $type = $ref->{'pageType'};
+        $type =~ s/-UNNECESSARY//;
+        return $type;
+    }
+
+    return 'NONEXISTENT';
+}
+
+sub formatPatternEntries {
+
+    # Format the entries field for pattern output
+
+    my $citations = shift;
+
+    # create temporary structure to determine nesting
+    # this should also factor in normalization...
+
+    my $temporary;
+
+    for my $citation (sort keys %$citations) {
+        my $format = $citations->{$citation}->{'d-format'};
+        my $target = $citations->{$citation}->{'target'};
+        if ($format =~ /^redirect/) {
+            $temporary->{$target}->{redirects}->{$citation} = $citations->{$citation};
+        }
+        else {
+            $temporary->{$citation}->{main} = $citations->{$citation};
+        }
+    }
+
+    # generate final output
+
+    my $output;
+
+    for my $citation (sort keys %$temporary) {
+        # process main first
+        if (exists $temporary->{$citation}->{main}) {
+            my $format = $citations->{$citation}->{'d-format'};
+            my $count = $citations->{$citation}->{'citation-count'};
+            my $articles = $citations->{$citation}->{'article-count'};
+            my $formatted = setFormat('display', $citation, $format);
+            $output .= "* $formatted ($count in $articles)\n";
+        }
+        else {
+            $output .= "* [[$citation]]\n";
+        }
+        # then process redirects
+        for my $redirect (sort keys %{$temporary->{$citation}->{redirects}}) {
+            my $data = $temporary->{$citation}->{redirects}->{$redirect};
+            my $format = $data->{'d-format'};
+            my $count = $data->{'citation-count'};
+            my $articles = $data->{'article-count'};
+            my $formatted = setFormat('display', $redirect, $format);
+            $output .= "** $formatted ($count in $articles)\n";
+        }
+    }
+
+    return $output;
+}
+
+
+#
+# Main
+#
+
+# handle UTF-8
+
+binmode(STDOUT, ':utf8');
+binmode(STDERR, ':utf8');
+
+# auto-flush output
+
+$| = 1;
+
+# generate output
+
+print "Generating maintenance ...\n";
+
+my $m0 = Benchmark->new;
+
+# delete existing database & create new one
+
+print "  creating database ...\n";
+
+if (-e $DBMAINTAIN) {
+    unlink $DBMAINTAIN
+        or die "ERROR: Could not delete file ($DBMAINTAIN)\n --> $!\n\n";
+}
+
+my $dbMaintain = citationsDB->new;
+$dbMaintain->cloneDatabase($DBINDIVIDUAL, $DBMAINTAIN);
+$dbMaintain->openDatabase($DBMAINTAIN);
+$dbMaintain->createTables(\@TABLES);
+
+my $dbTitles = citationsDB->new;
+$dbTitles->openDatabase($DBPARSE);
+
+# retrieve configuration
+
+my ($maintenance, $mRevision) = retrieveMaintenance($BOTINFO, $MAINTENANCE);
+
+my $sth = $dbMaintain->prepare('INSERT INTO revisions VALUES (?, ?)');
+$sth->execute('maintenance', $mRevision);
+$dbMaintain->commit;
+
+# process capitalizations
+
+my $bot = mybot->new($BOTINFO);
+
+print "  retrieving transclusions of $CAPITALIZATIONS ...\n";
+my $members = $bot->getTransclusions($CAPITALIZATIONS);
+my $targets = findCapitalizationTargets($dbMaintain, $members);
+
+my $current = 0;
+my $total = scalar keys %$targets;
+
+for my $target (keys %$targets) {
+
+    $current++;
+    print "  processing $current of $total capitalization targets ...\r";
+
+    my $results;
+
+    # process typos
+
+    for my $typo (keys %{$targets->{$target}}) {
+
+        my $normalization = normalizeCitation($typo);
+
+        my $sth = $dbMaintain->prepare('
+            SELECT citation
+            FROM normalizations
+            WHERE type = "journal"
+            AND normalization = ?
+        ');
+        $sth->bind_param(1, $normalization);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $citation = $ref->{'citation'};
+            my $type = pageType($dbTitles, $citation);
+            next unless (lc $typo eq lc $citation);
+            next unless (
+                ($type eq 'NONEXISTENT') or
+                (($type eq 'REDIRECT') and (exists $members->{$citation}))
+            );
+            my $sth = $dbMaintain->prepare('
+                SELECT dFormat, target, cCount, aCount
+                FROM individuals
+                WHERE type = "journal"
+                AND citation = ?
+            ');
+            $sth->bind_param(1, $citation);
+            $sth->execute();
+            while (my $ref = $sth->fetchrow_hashref()) {
+                $results->{$citation}->{'d-format'} = $ref->{'dFormat'};
+                $results->{$citation}->{'target'} = $ref->{'target'};
+                $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
+                $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+            }
+        }
+
+    }
+
+    # generate final data (que up transactions & commit at end)
+
+    if ($results) {
+
+        my $entries = formatTypoEntries($results);
+        my $articles = articleCount($dbMaintain, 'journal', $results);
+        my $citations = citationCount($results);
+
+        my $sth = $dbMaintain->prepare("
+            INSERT INTO capitalizations (target, entries, articles, citations)
+            VALUES (?, ?, ?, ?)
+        ");
+        $sth->execute($target, $entries, $articles, $citations);
+
+    }
+
+}
+print "                                                 \r";
+
+# process spellings
+
+print "  retrieving transclusions of $SPELLINGS ...\n";
+$members = $bot->getTransclusions($SPELLINGS);
+$targets = findSpellingTargets($dbTitles, $members);
+
+$current = 0;
+$total = scalar keys %$targets;
+
+for my $target (keys %$targets) {
+
+    $current++;
+    print "  processing $current of $total spelling targets ...\r";
+
+    my $results;
+
+    # process typos
+
+    for my $typo (keys %{$targets->{$target}}) {
+
+        my $normalization = normalizeCitation($typo);
+
+        my $sth = $dbMaintain->prepare('
+            SELECT citation
+            FROM normalizations
+            WHERE type = "journal"
+            AND normalization = ?
+        ');
+        $sth->bind_param(1, $normalization);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $citation = $ref->{'citation'};
+            my $type = pageType($dbTitles, $citation);
+            next unless (lc $typo eq lc $citation);
+            next unless (
+                ($type eq 'NONEXISTENT') or
+                (($type eq 'REDIRECT') and (exists $members->{$citation}))
+            );
+            my $sth = $dbMaintain->prepare('
+                SELECT dFormat, target, cCount, aCount
+                FROM individuals
+                WHERE type = "journal"
+                AND citation = ?
+            ');
+            $sth->bind_param(1, $citation);
+            $sth->execute();
+            while (my $ref = $sth->fetchrow_hashref()) {
+                $results->{$citation}->{'d-format'} = $ref->{'dFormat'};
+                $results->{$citation}->{'target'} = $ref->{'target'};
+                $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
+                $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+            }
+        }
+
+    }
+
+    # generate final data (que up transactions & commit at end)
+
+    if ($results) {
+
+        my $entries = formatTypoEntries($results);
+        my $articles = articleCount($dbMaintain, 'journal', $results);
+        my $citations = citationCount($results);
+
+        my $sth = $dbMaintain->prepare("
+            INSERT INTO spellings (target, entries, articles, citations)
+            VALUES (?, ?, ?, ?)
+        ");
+        $sth->execute($target, $entries, $articles, $citations);
+
+    }
+
+}
+print "                                                 \r";
+
+# process patterns
+
+$current = 0;
+$total = scalar keys %$maintenance;
+
+for my $target (keys %$maintenance) {
+
+    $current++;
+    print "  processing $current of $total patterns ...\r";
+
+    my $results;
+    my $counts;
+
+    # create ignore
+
+    my $ignore = '';
+
+    for my $pattern (keys %{$maintenance->{$target}->{'exclude'}}) {
+        $pattern =~ s/!/%/g;
+        $ignore .= "AND citation NOT LIKE '$pattern'\n";
+    }
+
+    # process pattern
+
+    for my $pattern (keys %{$maintenance->{$target}->{'include'}}) {
+
+        my $exclusion = $maintenance->{$target}->{'include'}->{$pattern};
+
+        (my $like = $pattern) =~ s/\Q.*\E/%/g;
+
+        my $sth = $dbMaintain->prepare("
+            SELECT citation, dFormat, target, cCount, aCount
+            FROM individuals
+            WHERE type = 'journal'
+            AND citation LIKE ?
+            $ignore
+        ");
+        $sth->bind_param(1, $like);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $citation = $ref->{'citation'};
+            my $format = $ref->{'dFormat'};
+            # apply exclusions if any
+            next if ($exclusion eq 'bluelinks') and (($format ne 'nonexistent') and ($format ne 'nowiki'));
+            next if ($exclusion eq 'redlinks') and (($format eq 'nonexistent') or ($format eq 'nowiki'));
+            # save results
+            $results->{$citation}->{'d-format'} = $format;
+            $results->{$citation}->{'target'} = $ref->{'target'};
+            $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
+            $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+            $counts->{$pattern}++;
+        }
+
+    }
+
+    # generate final data (que up transactions & commit at end)
+
+    if ($results) {
+
+        my $entries = formatPatternEntries($results);
+        my $articles = articleCount($dbMaintain, 'journal', $results);
+        my $citations = citationCount($results);
+
+        if (scalar keys %$results > $PATTERNMAX) {
+            $entries = "Patterns returned too many entries. Check patterns:\n";
+            for my $pattern (sort keys %$counts) {
+                $entries .= "* $pattern returned $counts->{$pattern} entries\n";
+            }
+            $articles = 'N/A';
+            $citations = 'N/A';
+        }
+
+        my $sth = $dbMaintain->prepare(q{
+            INSERT INTO patterns (target, entries, articles, citations)
+            VALUES (?, ?, ?, ?)
+        });
+        $sth->execute($target, $entries, $articles, $citations);
+
+    }
+
+}
+print "                                                 \r";
+
+$dbMaintain->commit;
+$dbMaintain->disconnect;
+$dbTitles->disconnect;
+
+my $m1 = Benchmark->new;
+my $md = timediff($m1, $m0);
+my $ms = timestr($md);
+$ms =~ s/^\s*(\d+)\swallclock secs.*$/$1/;
+print "  maintenance citations processed in $ms seconds\n";

@@ -1,0 +1,380 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Date::Manip;
+use File::Basename;
+use Getopt::Std;
+
+use lib dirname(__FILE__) . '/modules';
+
+use mybot;
+
+#
+# Validate Environment Variables
+#
+
+unless (exists $ENV{'WIKI_CONFIG_DIR'}) {
+    die "ERROR: WIKI_CONFIG_DIR environment variable not set\n";
+}
+
+#
+# Configuration & Explicit Globals
+#
+
+my %dayswait = (                        # wait before removing templates (in days) by type
+    'CONSTRUCTION' => 7,                # wait before removing under-construction templates (in days)
+    'INUSE'        => 1,                # wait before removing template (in days)
+);
+
+my %templates = (                       # templates to check by type
+    'CONSTRUCTION' => [
+        'Template:In creation',
+        'Template:New page',
+        'Template:Under construction',
+    ],
+    'INUSE' => [
+        'Template:GOCEinuse',
+        'Template:In use section',      # inuse-section must be before in use as it transcludes it
+        'Template:In use',
+    ],
+);
+
+my $userinfo = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';    # user & pass info file
+my $skipinfo = $ENV{'WIKI_CONFIG_DIR'} .  '/inuse-seen.cfg';  # last seen info
+
+#
+# Subroutines
+#
+
+sub deltadays {
+
+    # This subroutine finds the difference, in days, between a previous data and
+    # today.  It is passed the date to difference and returns the delta.
+
+    my $previous = shift;
+
+    my $now = ParseDate('now');
+
+    my $err = 0;
+    my $diff = DateCalc($previous, $now, \$err, 0);
+    if ($err != 0) {
+        print "previous = $previous\n";
+        print "now      = $now\n";
+        die "\nError: date calculation failed!\n\n";
+    }
+
+    # modified to handle change in DateCalc which is no longer normalizing the
+    # deltas, hours seems to be the maximum unit now; made change broader to
+    # possible catch issues from future changes
+
+    if ($diff =~ /-/) {
+        print "previous = $previous\n";
+        print "now      = $now\n";
+        print "diff     = $diff\n";
+        die "\nError: date calculation produced negative result!\n\n";
+    }
+
+    my ($years, $months, $weeks, $days, $hours, $minutes, $seconds) = split /:/, $diff;
+
+    if (($years > 0) or ($months > 0)) {
+        print "previous = $previous\n";
+        print "now      = $now\n";
+        print "diff     = $diff\n";
+        die "\nError: date calculation produced unexpected result!\n\n";
+    }
+
+    $seconds += ($weeks * 604800) + ($days * 86400) + ($hours * 3600) + ($minutes * 60);
+
+    my $dDays = int($seconds / 86400);
+
+    return $dDays;
+}
+
+sub loadskipped {
+
+    # This subroutine loads the pages skipped during the last run.  It is passed
+    # the file name and dayswait.  It returns a hash ref with the page info.
+
+    my $file     = shift;
+    my $dayswait = shift;
+
+    open FILE, '<:utf8', $file
+        or die "\nError: Could not open file ($file)!\n  --> $!\n\n";
+
+    my $last;   # days since last run
+    my $info;   # page info
+
+    while (<FILE>) {
+
+      chomp;
+
+      if (/^LAST RUN/) {
+          my $date = (split / = /)[1];
+          $last = deltadays($date);
+      }
+
+      if (/^(INUSE|CONSTRUCTION) = (.+) --> (.+)$/) {
+          my $type  = $1;
+          my $page  = $2;
+          my $delta = $3;
+          my $days = $last + $delta;            # calculate new last edit time
+          if ($days < $dayswait->{$type}) {     # only skip if still less than threshold
+              $info->{$page}->{type} = $type;
+              $info->{$page}->{days} = $days;
+          }
+      }
+
+    }
+
+    close FILE;
+
+    return $info;
+}
+
+sub saveskipped {
+
+    # This subroutines saves the skipped pages.  It is passed the file name and
+    # an hash ref with the skipped page info.
+
+    my $file    = shift;
+    my $skipped = shift;
+
+    open FILE, '>:utf8', $file
+        or die "\nError: Could not open file ($file)!\n  --> $!\n\n";
+
+    print FILE "#\n# In Use Seen\n#\n";
+    print FILE "LAST RUN = " . UnixDate( "today" , "%Y%m%d") . "\n";    # use midnight to avoid rounding errors
+
+    for my $page (sort keys %$skipped) {
+        my $type = $skipped->{$page}->{type};
+        my $days = $skipped->{$page}->{days};
+        print FILE "$type = $page --> $days\n";
+    }
+
+    close FILE;
+
+    return;
+}
+
+sub buildPattern {
+
+    # This subroutine builds an regex OR pattern for matching a template and its
+    # redirects.  It is passed the bot and the template and returns the pattern.
+
+    my $bot      = shift;
+    my $template = shift;
+
+    print "  Building template pattern ...\n";
+
+    my $pattern .= $template . '|';
+
+    my $redirects = $bot->getRedirects($template, 10);
+    for my $redirect (sort keys %$redirects) {
+        $pattern .= $redirect . '|';
+    }
+
+    $pattern =~ s/Template://g;
+    $pattern =~ s/ /\[ _\]\+/g;
+    $pattern =~ s/\|$//;
+
+    $pattern = qr/(?:Template:\s*)?(?:$pattern)/i;
+
+    return $pattern;
+}
+
+sub lastedited {
+
+    # This subroutine finds when an article was last edited in days.  It is
+    # passed the bot handle and the name of the page.  It returns the delta, in
+    # days, since the last edit.
+
+    my $bot  = shift;
+    my $page = shift;
+
+    my ($date, $time) = $bot->getTimestamp($page);
+
+    $date =~ s/-//g;
+
+    my $lastedit = $date . $time;
+
+    return deltadays($lastedit);
+}
+
+sub addskipped {
+
+    # This subroutines add a page to the skipped pages file.  It is passed the
+    # file name, the type, the page name, and the delta.
+
+    my $file  = shift;
+    my $type  = shift;
+    my $page  = shift;
+    my $delta = shift;
+
+    open FILE, '>>:utf8', $file
+        or die "\nError: Could not open file ($file)!\n  --> $!\n\n";
+
+    print FILE "$type = $page --> $delta\n";
+
+    close FILE;
+
+    return;
+}
+
+sub removetemplates {
+
+    # This subroutine removes templates from an article.  It is passed the text
+    # to process and a pattern for the templates to remove.  It returns the
+    # modified text.
+
+    my $text    = shift;
+    my $pattern = shift;
+
+    my $hold = $text;
+
+    $text =~ s/^\{\{\s*$pattern(?:\s*\|[^}]*)?\s*\}\}\n*//ig;     # at start of article (w/ or w/o newline)
+    $text =~ s/\n\{\{\s*$pattern(?:\s*\|[^}]*)?\s*\}\}\n+/\n/ig;  # multiple newlines replaced with one
+    $text =~ s/\{\{\s*$pattern(?:\s*\|[^}]*)?\s*\}\}//ig;         # in-line
+
+    return $text;
+}
+
+#
+# Main
+#
+
+# command line options
+
+my %opts;
+getopts('htn:', \%opts);
+
+if ($opts{h}) {
+    print "usage: wiki-bot-inuse [-hts] [-p page] [-n #]\n";
+    print "       where: -h = help\n";
+    print "              -n = maximum number of edits\n";
+    exit;
+}
+
+my $nFlag = $opts{n} ? $opts{n} : 0;      # specify number of edits
+
+# handle UTF-8
+
+binmode(STDOUT, ':utf8');
+binmode(STDERR, ':utf8');
+
+# work in UTC:
+
+$ENV{'TZ'} = 'UTC';
+
+# initialize bot
+
+my $bot = mybot->new($userinfo);
+
+# retrieve & update saved information
+
+my $previous = loadskipped($skipinfo, \%dayswait);
+saveskipped($skipinfo, $previous);
+
+# process templates and remove as needed
+
+my $edits;              # total number of edits
+my $counter;            # number of edits made by type
+my $remaining;          # hash ref of number of templates remaining by type & day
+my @problems;           # pages with problems
+
+for my $type (sort keys %templates) {
+
+    for my $template (@{$templates{$type}}) {
+
+        print "Processing $type $template ...\n\n";
+
+        # build matching pattern to match template & redirects
+
+        my $pattern = buildPattern($bot, $template);
+
+        # retrieve & process transclusions
+
+        print "  Retrieving transclusions for $template ...\n\n";
+
+        my $pages = $bot->getTransclusions($template, 0);
+
+        for my $page (sort keys %$pages) {
+
+            if ((exists $previous->{$page}) and ($previous->{$page}->{days} < $dayswait{$type}) ) {
+                print "  Ignoring $page ...\n";
+                print "    previous last edit was $previous->{$page}->{days} days ago\n\n";
+                $remaining->{$type}->{ $previous->{$page}->{days} }++;
+                next;
+            }
+
+            print "  Processing $page ...\n";
+
+            my $dDays = lastedited($bot, $page);
+
+            if ($dDays < $dayswait{$type}) {
+                print "    skipping as last edited $dDays days ago\n\n";
+                addskipped($skipinfo, $type, $page, $dDays);
+                $remaining->{$type}->{$dDays}++;
+                }
+            else {
+                print "    removing as last edited $dDays days ago\n";
+
+                my ($text, $timestamp) = $bot->getText($page);
+
+                my $new = removetemplates($text, $pattern);
+
+                if ($text eq $new) {
+                    warn "\nNo change made! Huh?!?\n\n";
+                    push @problems, $page;
+                    next;
+                }
+
+                print "    saving change...\n\n";
+
+                my $commsg = 'removing stale ' . lc($type) . " template as last edited $dDays days ago";
+
+                $bot->saveText($page, $timestamp, $new, $commsg, 'Minor', 'Bot');
+
+                $edits++;
+                $counter->{$type}++;
+                if ($nFlag and ($edits == $nFlag) ) {
+                    print "\nMaximum number of edits reached!\n\n";
+                    exit;
+                }
+
+            }
+
+        }
+
+    }
+
+}
+print "\n\n";
+
+# print statistics
+
+for my $type (sort keys %$counter) {
+    print "Removed $counter->{$type} $type templates.\n";
+}
+print "\n";
+
+for my $type (sort keys %$remaining) {
+    print "$type templates remaining:\n";
+    for my $days (sort keys %{$remaining->{$type}}) {
+        next unless ($remaining->{$type}->{$days});
+        print "  $days days = $remaining->{$type}->{$days}\n";
+    }
+    print "\n";
+}
+print "\n";
+
+# print problems
+
+if (@problems) {
+    print "Problems:\n\n";
+    for (sort @problems) {
+        print "  $_\n";
+    }
+    print "\n";
+}

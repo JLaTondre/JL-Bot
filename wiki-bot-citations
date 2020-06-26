@@ -1,0 +1,245 @@
+#!/bin/bash
+
+LOCATION="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+DIRECTORY=$LOCATION/citations
+
+CONFIGFALSE='User:JL-Bot/Citations.cfg'
+CONFIGPUBS='User:JL-Bot/Publishers.cfg'
+CONFIGQUESTION='User:JL-Bot/Questionable.cfg'
+CONFIGMAIN='User:JL-Bot/Maintenance.cfg'
+
+# functions
+
+function checkDownload() {
+    # determine expected dump based on date
+    DAY=`date +%d`
+    if [ "$DAY" -gt 20 ]
+    then
+        EXPECTED=$(date +%Y%m)20
+    else
+        EXPECTED=$(date +%Y%m)01
+    fi
+    # if current & expected don't match see if expected is availble for download
+    if [ "${1}" -ne "$EXPECTED" ]
+    then
+        STATUS=`curl --silent --head https://dumps.wikimedia.org/enwiki/${EXPECTED}/enwiki-${EXPECTED}-pages-articles.xml.bz2 | head -n1 | grep "HTTP/1.1 [23].."`
+        if [ -n "$STATUS" ]
+        then
+            echo $EXPECTED
+        fi
+    fi
+}
+
+function findLatest() {
+    FILE=`ls enwiki-*-pages-articles.xml.bz2 2> /dev/null | sort -n | tail -1`
+    echo $FILE | sed -e 's/^.*enwiki-\([0-9]*\)-pages.*$/\1/'
+}
+
+function getCurrentRevision() {
+    # query 5 revisions, take revision number of first one that is not by JL-Bot
+    CURL=`curl "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&titles=${1}&rvprop=ids|user&format=json&rvlimit=5" 2> /dev/null`
+    REVID=`echo $CURL | grep -Po '"revid":[0-9]*,.*?,"user":"[^"]*"' | grep -v 'JL-Bot' | head -1 | sed -e 's/^.*"revid":\([0-9]*\),.*$/\1/'`
+    if [ -z "$REVID" ]
+    then
+        # only JL-Bot revisions so set low number so doesn't run
+        REVID='0'
+    fi
+    echo $REVID
+}
+
+function getHistoryRevision() {
+    REVID=`sqlite3 Citations/${1} "SELECT revision FROM revisions WHERE type = '${2}';"`
+    echo $REVID
+}
+
+function outputTable() {
+    sqlite3 Citations/${1} << EOF
+.output ${2}
+SELECT * FROM ${3} ORDER BY ${4}
+EOF
+}
+
+# command line arguments
+
+while getopts ah option
+do
+    case "${option}"
+    in
+        a) ALPHABET=1;;
+        h) HELP=1;;
+    esac
+done
+
+# display help & exit (if requested)
+
+if [ -n "$HELP" ]
+then
+    echo "usage: wiki-bot-citations -ahu -d {YYMMDD}"
+    echo "       where: a = output alphabetical listing for testing"
+    echo "              h = display help"
+    exit
+fi
+
+# set up processing
+
+if [ ! -d "$WIKI_WORKING_DIR" ]
+then
+    echo "WIKI_WORKING_DIR not set!"
+    exit 1
+fi
+
+cd $WIKI_WORKING_DIR
+
+# output alphabetical listing & exit (if requested)
+
+if [ -n "$ALPHABET" ]
+then
+    TIMESTAMP=$(date +"%d%H%M%S")
+    outputTable db-individual.sqlite3 x-individual-$TIMESTAMP individuals 'type, letter, citation, target'
+    outputTable db-common.sqlite3 x-common-$TIMESTAMP commons 'type, target, citations DESC, articles DESC'
+    outputTable db-specific.sqlite3 x-questionables-$TIMESTAMP questionables 'target, citations DESC, articles DESC'
+    outputTable db-specific.sqlite3 x-publishers-$TIMESTAMP publishers 'target, citations DESC, articles DESC'
+    outputTable db-maintenance.sqlite3 x-capitalizations-$TIMESTAMP capitalizations 'target, citations DESC, articles DESC'
+    outputTable db-maintenance.sqlite3 x-spellings-$TIMESTAMP spellings 'target, citations DESC, articles DESC'
+    outputTable db-maintenance.sqlite3 x-patterns-$TIMESTAMP patterns 'target, citations DESC, articles DESC'
+    exit
+fi
+
+# determine if download & full processing required otherwise do an update
+
+LATEST=$(findLatest)
+DOWNLOAD=$(checkDownload $LATEST)
+TIMESTAMP=$(date +"%m%d%H%M%S")
+
+set -e
+
+if [ -n "$DOWNLOAD" ]
+then
+
+    # full process
+
+    echo "Downloading $DOWNLOAD dump ..."
+
+    wget https://dumps.wikimedia.org/enwiki/${DOWNLOAD}/enwiki-${DOWNLOAD}-pages-articles.xml.bz2
+
+    mv Citations Citations-${LATEST}-${TIMESTAMP}
+    mkdir Citations
+
+    $DIRECTORY/citations-parse.pl "enwiki-${DOWNLOAD}-pages-articles.xml.bz2"
+    $DIRECTORY/citations-extract.pl
+    $DIRECTORY/citations-individual.pl
+    $DIRECTORY/citations-common.pl
+    $DIRECTORY/citations-specified.pl
+    $DIRECTORY/citations-maintenance.pl
+    $DIRECTORY/citations-save.pl
+    $DIRECTORY/citations-doi.pl
+    $DIRECTORY/citations-statistics.pl
+
+else
+
+    # update common, etc. based on configuration
+    # it is technically possible (though not likely for each to have different false positives)
+
+    COMMON=0
+    QUESTIONABLE=0
+    PUBLISHERS=0
+    MAINTENANCE=0
+
+    # check common (false positives only)
+
+    FPCURRENT=$(getCurrentRevision $CONFIGFALSE)
+    FPHISTORY=$(getHistoryRevision db-common.sqlite3 falsePositive)
+
+    if [ "$FPCURRENT" -gt "$FPHISTORY" ]
+    then
+        echo "Common processing needed (False Positive: ${FPCURRENT} > ${FPHISTORY})"
+        COMMON=1
+    fi
+
+    # check questionable (false positives & configuration)
+
+    FPHISTORY=$(getHistoryRevision db-specific.sqlite3 falsePositive)
+
+    if [ "$FPCURRENT" -gt "$FPHISTORY" ]
+    then
+        echo "Questionable processing needed (False Positive: ${FPCURRENT} > ${FPHISTORY})"
+        QUESTIONABLE=1
+    fi
+
+    CFGCURRENT=$(getCurrentRevision $CONFIGQUESTION)
+    CFGHISTORY=$(getHistoryRevision db-specific.sqlite3 questionable)
+
+    if [ "$CFGCURRENT" -gt "$CFGHISTORY" ]
+    then
+        echo "Questionable processing needed (Configuration: ${CFGCURRENT} > ${CFGHISTORY})"
+        QUESTIONABLE=1
+    fi
+
+    # check publishers (false positives & configuration)
+
+    FPHISTORY=$(getHistoryRevision db-specific.sqlite3 falsePositive)
+
+    if [ "$FPCURRENT" -gt "$FPHISTORY" ]
+    then
+        echo "Publishers processing needed (False Positive: ${FPCURRENT} > ${FPHISTORY})"
+        PUBLISHERS=1
+    fi
+
+    CFGCURRENT=$(getCurrentRevision $CONFIGPUBS)
+    CFGHISTORY=$(getHistoryRevision db-specific.sqlite3 publisher)
+
+    if [ "$CFGCURRENT" -gt "$CFGHISTORY" ]
+    then
+        echo "Publishers processing needed (Configuration: ${CFGCURRENT} > ${CFGHISTORY})"
+        PUBLISHERS=1
+    fi
+
+    # check maintenance (configuration only)
+
+    CFGCURRENT=$(getCurrentRevision $CONFIGMAIN)
+    CFGHISTORY=$(getHistoryRevision db-maintenance.sqlite3 maintenance)
+
+    if [ "$CFGCURRENT" -gt "$CFGHISTORY" ]
+    then
+        echo "Maintenance processing needed (Configuration: ${CFGCURRENT} > ${CFGHISTORY})"
+        MAINTENANCE=1
+    fi
+
+    # process required ones
+
+    if [ "$COMMON" -gt 0 ] || [ "$QUESTIONABLE" -gt 0 ] || [ "$PUBLISHERS" -gt 0 ] || [ "$MAINTENANCE" -gt 0 ]
+    then
+        echo "Creating copy..."
+        cp -r Citations Citations-${LATEST}-${TIMESTAMP}
+
+        if [ "$COMMON" -gt 0 ]
+        then
+            $DIRECTORY/citations-4-common.pl
+            $DIRECTORY/citations-save.pl -c
+        fi
+
+        if [ "$QUESTIONABLE" -gt 0 ] && [ "$PUBLISHERS" -gt 0 ]
+        then
+            $DIRECTORY/citations-specified.pl
+            $DIRECTORY/citations-save.pl -qp
+        elif [ "$QUESTIONABLE" -gt 0 ]
+        then
+            $DIRECTORY/citations-specified.pl -q
+            $DIRECTORY/citations-save.pl -q
+        elif [ "$PUBLISHERS" -gt 0 ]
+        then
+            $DIRECTORY/citations-specified.pl -p
+            $DIRECTORY/citations-save.pl -p
+        fi
+
+        if [ "$MAINTENANCE" -gt 0 ]
+        then
+            $DIRECTORY/citations-maintenance.pl
+            $DIRECTORY/citations-save.pl -m
+        fi
+
+        $DIRECTORY/citations-save.pl -f
+        $DIRECTORY/citations-doi.pl
+    fi
+
+fi

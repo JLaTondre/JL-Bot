@@ -1,0 +1,73 @@
+#!/bin/bash
+
+LOCATION="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+DIRECTORY=$LOCATION/dois
+
+# function
+
+function findLatest01dump() {
+    # last dump file that is a first of the month dump
+    FILE=`ls enwiki-*01-pages-articles.xml.bz2 2> /dev/null | sort -n | tail -1`
+    echo $FILE | sed -e 's/^.*enwiki-\([0-9]*\)-pages.*$/\1/'
+}
+
+function findLatestRegistrants() {
+    # last doi file
+    FILE=`ls Dois/doi-registrants-* 2> /dev/null | sort -n | tail -1`
+    echo $FILE | sed -e 's/^.*doi-registrants-\([0-9]*\)$/\1/'
+}
+
+# command line arguments
+
+while getopts r option
+do
+    case "${option}"
+    in
+        r) RESUME=1;;
+        h) HELP=1;;
+    esac
+done
+
+# display help & exit (if requested)
+
+if [ -n "$HELP" ]
+then
+    echo "usage: wiki-bot-dois -hr"
+    echo "       where: h = display help"
+    echo "              r = resume downloading"
+    exit
+fi
+
+# set up processing
+
+if [ ! -d "$WIKI_WORKING_DIR" ]
+then
+    echo "WIKI_WORKING_DIR not set!"
+    exit 1
+fi
+
+cd $WIKI_WORKING_DIR
+
+set -e
+
+# find current versions
+
+DUMPFILE=$(findLatest01dump)
+REGFILE=$(findLatestRegistrants)
+
+# check for resume option (will trump new version detection)
+
+OPTION=""
+if [ -n "$RESUME" ]
+then
+    OPTION="-r $REGFILE"
+fi
+
+# determine if processing needed
+
+if [ "$REGFILE" -lt "$DUMPFILE" ] || [ -n "$OPTION" ]
+then
+    $DIRECTORY/dois-retrieve.py ${OPTION}
+    $DIRECTORY/dois-upload.py
+    $DIRECTORY/dois-compare.py
+fi
