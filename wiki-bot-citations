@@ -214,7 +214,7 @@ else
 
         if [ "$COMMON" -gt 0 ]
         then
-            $DIRECTORY/citations-4-common.pl
+            $DIRECTORY/citations-common.pl
             $DIRECTORY/citations-save.pl -c
         fi
 
@@ -240,6 +240,8 @@ else
 
         $DIRECTORY/citations-save.pl -f
         $DIRECTORY/citations-doi.pl
+    else
+        echo "Citations processing not required"
     fi
 
 fi

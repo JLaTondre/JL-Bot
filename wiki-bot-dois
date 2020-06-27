@@ -70,4 +70,6 @@ then
     $DIRECTORY/dois-retrieve.py ${OPTION}
     $DIRECTORY/dois-upload.py
     $DIRECTORY/dois-compare.py
+else
+    echo "DOI registrant processing not required"
 fi
