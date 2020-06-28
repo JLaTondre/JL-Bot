@@ -796,20 +796,20 @@ if (-e $DBSPECIFIC) {
     my @commands;
     my @table;
     if ($processPublishers) {
-        @commands = (
+        push (@commands, (
             q{ DROP TABLE publishers; },
             q{ DELETE FROM revisions WHERE type = "publisher"; },
             q{ DELETE FROM revisions WHERE type = "falsePositive"; },
-        );
-        @table = \@PUBTABLE;
+        ));
+        push (@table, @PUBTABLE);
     }
     if ($processQuestionable) {
-        @commands = (
+        push (@commands, (
             q{ DROP TABLE questionables; },
             q{ DELETE FROM revisions WHERE type = "questionable"; },
             q{ DELETE FROM revisions WHERE type = "falsePositive"; },
-        );
-        @table = \@QUETABLE;
+        ));
+        push (@table, @QUETABLE);
     }
     for my $sql (@commands) {
         my $sth = $dbSpecific->prepare($sql);
