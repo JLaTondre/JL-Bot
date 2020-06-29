@@ -207,7 +207,7 @@ sub updateQuestionable {
                 my $letter = initial($target);
                 if (exists $targets->{$letter}->{$target}) {
                     $updated .= "{{JCW-doi-redirects|$target";
-                    for my $redirect (sort sortPrefixes %{$targets->{$letter}->{$target}}) {
+                    for my $redirect (sort sortPrefixes keys %{$targets->{$letter}->{$target}}) {
                         $updated .= "|$redirect";
                     }
                     $updated .= "}}\n";
