@@ -60,7 +60,6 @@ my %COMMON = (                  # number of common entries to output (shared wit
 
 my $NORMALMAX = 250;            # number of entries per non-target page
 my $COMMONMAX = 100;            # number of entries per target page
-my $PUBMAX    = 10;             # number of entries per publisher page
 my $LINEMAX   = 12700;          # maximum number of lines per page
 
 my %PAGETITLE = (
@@ -1209,7 +1208,7 @@ if ($savePublishers) {
 
     my $records = generatePublisher($database, $row);
     my $revision = publisherRevisions($database);
-    savePages($bot, 'journal', 'Publisher', $top, $bottomPublishers, $records, $PUBMAX, $LINEMAX);
+    savePages($bot, 'journal', 'Publisher', $top, $bottomPublishers, $records, $COMMONMAX, $LINEMAX);
     saveBottom($bot, $bottomPublishers, "{{$bottom|date=$wikidate|$revision}}");
 
     $database->commit;
