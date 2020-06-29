@@ -129,6 +129,7 @@ then
     $DIRECTORY/citations-extract.pl
     $DIRECTORY/citations-individual.pl
     $DIRECTORY/citations-common.pl
+    $DIRECTORY/citations-configuration.pl
     $DIRECTORY/citations-specified.pl
     $DIRECTORY/citations-maintenance.pl
     $DIRECTORY/citations-save.pl
@@ -136,6 +137,10 @@ then
     $DIRECTORY/citations-statistics.pl
 
 else
+
+    # update DOI redirect configuration
+
+    $DIRECTORY/citations-configuration.pl
 
     # update common, etc. based on configuration
     # it is technically possible (though not likely for each to have different false positives)
