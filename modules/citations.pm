@@ -26,6 +26,7 @@ our @EXPORT_OK = qw(
     findNormalizations
     findRedirectExpansions
     formatCitation
+    initial
     isUppercaseMatch
     loadRedirects
     normalizeCitation
@@ -38,15 +39,6 @@ our @EXPORT_OK = qw(
 #
 # Internal Subroutines
 #
-
-sub sortDoiCitation {
-
-    # Sort the doi citations such that prefix only is always last
-
-    return  1 if ($a eq 'NONE');
-    return -1 if ($b eq 'NONE');
-    return $a cmp $b;
-}
 
 #
 # Exported Subroutines
@@ -410,6 +402,22 @@ sub formatCitation {
     my $formatted = setFormat('display', $citation, $format);
 
     return "$formatted ($citations in $articles)";
+}
+
+sub initial {
+
+    # Return the first 'letter' of the title | citation.
+
+    my $term = shift;
+
+    my $initial = $term;
+
+    $initial =~ s/^(?:(?:the|les?|la)\s|l')?(.).*$/$1/i;    # extract first character
+    $initial = 'Non' if ($initial !~ /\p{IsASCII}/);        # non-letters and non-numbers
+    $initial = 'Num' if ($initial !~ /\p{IsAlpha}/);        # numbers
+    $initial = uc $initial if ($initial =~ /^[a-z]/);       # make sure alpha are uppercase
+
+    return $initial;
 }
 
 sub isUppercaseMatch {

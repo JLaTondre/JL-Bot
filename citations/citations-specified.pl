@@ -637,7 +637,7 @@ sub retrieveSpecified {
 
         $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
 
-        if ($line =~ /^\s*\{\{\s*JCW-(selected|pattern)\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+        if ($line =~ /^\s*\{\{\s*JCW-(selected|pattern|doi-redirects)\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
             my $template   = $1;
             my $target     = $2;
             my $additional = $3;
@@ -702,6 +702,21 @@ sub retrieveSpecified {
                     }
                 }
 
+            }
+            elsif ($template eq 'doi-redirects') {
+                if ($additional) {
+                    my @terms = split(/\|/, $additional);
+                    for my $term (@terms) {
+                        if ($term !~ /^10\.\d{4,5}$/) {
+                            warn "WARNING: unexpected DOI format --> $target --> $term\n$line\n";
+                            next;
+                        }
+                        $specified->{$target}->{'doi'}->{$term} = 1;
+                    }
+                }
+                else {
+                    warn "WARNING: missing DOI parameters --> $target\n$line\n";
+                }
             }
         }
     }
@@ -815,7 +830,7 @@ if (-e $DBSPECIFIC) {
         my $sth = $dbSpecific->prepare($sql);
         $sth->execute;
     }
-    $dbSpecific->createTables(@table);
+    $dbSpecific->createTables(\@table);
 }
 else {
     $dbSpecific->cloneDatabase($DBINDIVIDUAL, $DBSPECIFIC);

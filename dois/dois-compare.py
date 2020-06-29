@@ -85,7 +85,7 @@ output = False
 try:
     arguments, values = getopt.getopt(sys.argv[1:], 'hp')
 except getopt.error as err:
-    print (str(err))
+    print(str(err))
     sys.exit(2)
 
 for argument, value in arguments:

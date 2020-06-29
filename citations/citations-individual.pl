@@ -11,7 +11,7 @@ use File::Basename;
 
 use lib dirname(__FILE__) . '/../modules';
 
-use citations qw( checkInterwiki loadInterwiki );
+use citations qw( checkInterwiki initial loadInterwiki );
 use citationsDB;
 
 use utf8;
@@ -74,22 +74,6 @@ sub articleCount {
     }
 
     return $formatted;
-}
-
-sub initial {
-
-    # Return the first 'letter' of the title | citation.
-
-    my $term = shift;
-
-    my $initial = $term;
-
-    $initial =~ s/^(?:(?:the|les?|la)\s|l')?(.).*$/$1/i;    # extract first character
-    $initial = 'Non' if ($initial !~ /\p{IsASCII}/);        # non-letters and non-numbers
-    $initial = 'Num' if ($initial !~ /\p{IsAlpha}/);        # numbers
-    $initial = uc $initial if ($initial =~ /^[a-z]/);       # make sure alpha are uppercase
-
-    return $initial;
 }
 
 sub queryCitations {
