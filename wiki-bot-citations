@@ -3,6 +3,8 @@
 LOCATION="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 DIRECTORY=$LOCATION/citations
 
+BOT='JL-Bot'
+
 CONFIGFALSE='User:JL-Bot/Citations.cfg'
 CONFIGPUBS='User:JL-Bot/Publishers.cfg'
 CONFIGQUESTION='User:JL-Bot/Questionable.cfg'
@@ -36,12 +38,18 @@ function findLatest() {
 }
 
 function getCurrentRevision() {
-    # query 5 revisions, take revision number of first one that is not by JL-Bot
+    # by default look at all revisions, but if ignore flag set (w/any value), skip bot edits
+    IGNORE='cat'
+    if [ -n "${2}" ]
+    then
+        IGNORE="grep -v ${BOT}"
+    fi
+    # pull 5 revisions & filter them if ignore specified
     CURL=`curl "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&titles=${1}&rvprop=ids|user&format=json&rvlimit=5" 2> /dev/null`
-    REVID=`echo $CURL | grep -Po '"revid":[0-9]*,.*?,"user":"[^"]*"' | grep -v 'JL-Bot' | head -1 | sed -e 's/^.*"revid":\([0-9]*\),.*$/\1/'`
+    REVID=`echo $CURL | grep -Po '"revid":[0-9]*,.*?,"user":"[^"]*"' | ${IGNORE} | head -1 | sed -e 's/^.*"revid":\([0-9]*\),.*$/\1/'`
+    # if no results, then only filtered bot edits so set to low value so won't run
     if [ -z "$REVID" ]
     then
-        # only JL-Bot revisions so set low number so doesn't run
         REVID='0'
     fi
     echo $REVID
@@ -151,8 +159,9 @@ else
     MAINTENANCE=0
 
     # check common (false positives only)
+    # ignore bot edits for false positives as these would be statistics updates only
 
-    FPCURRENT=$(getCurrentRevision $CONFIGFALSE)
+    FPCURRENT=$(getCurrentRevision $CONFIGFALSE 'IGNORE')
     FPHISTORY=$(getHistoryRevision db-common.sqlite3 falsePositive)
 
     if [ "$FPCURRENT" -gt "$FPHISTORY" ]
