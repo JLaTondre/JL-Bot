@@ -644,13 +644,13 @@ sub retrieveSpecified {
 
             # pull out source & notes
 
-            if ($additional =~ s/(?:^|\|)\s*source\s*=\s*(.*?)\s*(\||$)/$2/) {
+            if (($additional) and ($additional =~ s/(?:^|\|)\s*source\s*=\s*(.*?)\s*(\||$)/$2/)) {
                 my $rationale = $1;
                 $rationale =~ s/##--##(.*?)##--##(.*?)##-##/[[$1|$2]]/g;        # unescape [[this|that]]
                 $specified->{$target}->{'source'} = $rationale;
             }
 
-            if ($additional =~ s/(?:^|\|)\s*note\s*=\s*(.*?)\s*(\||$)/$2/) {
+            if (($additional) and ($additional =~ s/(?:^|\|)\s*note\s*=\s*(.*?)\s*(\||$)/$2/)) {
                 my $rationale = $1;
                 $rationale =~ s/##--##(.*?)##--##(.*?)##-##/[[$1|$2]]/g;        # unescape [[this|that]]
                 $specified->{$target}->{'note'} = $rationale;
