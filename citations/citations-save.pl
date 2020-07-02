@@ -60,7 +60,7 @@ my %COMMON = (                  # number of common entries to output (shared wit
 
 my $NORMALMAX = 250;            # number of entries per non-target page
 my $COMMONMAX = 100;            # number of entries per target page
-my $LINEMAX   = 12700;          # maximum number of lines per page
+my $LINEMAX   = 9500;           # maximum number of lines per page
 
 my %PAGETITLE = (
     'journal'  => 'WikiProject Academic Journals/Journals cited by Wikipedia',
@@ -743,20 +743,15 @@ sub savePages {
             $output .= "}}\n";
         }
 
-        # only output lines if won't exceed line maximum
+        # only output lines if first record or won't exceed line maximum
 
         $lTotal += () = $line =~ /\n/g;
 
-        if ($lTotal <= $lMaximum) {
+        if (($rPage == 0) or ($lTotal <= $lMaximum)) {
             $output .= $line;
 
             $rPage++;
             $rTotal++;
-        }
-
-        if (($lTotal > $lMaximum) and ($rPage == 0)) {
-            # should not happen but catch as would cause issues with current logic
-            die "ERROR: single entry larger that page maximum!\n\n";
         }
 
         # if we reach the maximums for the page or the last possible record, end page
@@ -802,15 +797,16 @@ sub savePages {
             }
 
             $pCurrent++;
-            $rPage = 0;
 
-            if ($lTotal > $lMaximum) {
+            if (($rPage > 1) and ($lTotal > $lMaximum)) {
                 # if exceeded max lines, didn't output current record
                 # so need to repeat loop to output
+                $rPage = 0;
                 $lTotal = 0;
                 redo;
             }
 
+            $rPage = 0;
             $lTotal = 0;
         }
     }
