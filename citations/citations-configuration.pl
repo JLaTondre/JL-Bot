@@ -94,10 +94,21 @@ sub sortTemplates {
 
     # sort templates in selected, pattern, doi order
 
-    return -1 if ($a eq 'JCW-selected');
-    return  1 if ($b eq 'JCW-selected');
-    return  1 if ($a eq 'JCW-doi-redirects');
-    return -1 if ($b eq 'JCW-doi-redirects');
+    my %order = (
+        'selected'      => 1,
+        'pattern'       => 2,
+        'doi-redirects' => 3,
+    );
+
+    unless (exists $order{$a}) {
+        die "ERROR: template type unknown --> $a";
+    }
+
+    unless (exists $order{$b}) {
+        die "ERROR: template type unknown --> $b";
+    }
+
+    return $order{$a} <=> $order{$b};
 }
 
 sub updatePublisher {
