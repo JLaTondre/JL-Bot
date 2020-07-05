@@ -268,6 +268,10 @@ sub templateStatistics {
             $byTemplate->{$template}++;
             $total++;
         }
+        elsif (/^.+?\t\{\{(?:\s*Template\s*:)?\s?(.+?)\}\}$/) {
+            # template without contents
+            next;
+        }
         else {
             die "ERROR: Unknown line! --> $_\n";
         }
