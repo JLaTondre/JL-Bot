@@ -159,6 +159,8 @@ def saveSummary(site, listing):
     for doi in listing:
         text += '* [[User:JL-Bot/DOI/' + doi + '|' + doi + ']]\n'
 
+    text += '* [[User:JL-Bot/DOI/Deltas|Deltas]]\n'
+
     page = site.pages[page]
     page.save(text, 'DOI prefix registrant listing')
 
