@@ -156,7 +156,7 @@ sub updatePublisher {
                 }
                 $line .= "}}";
                 # add to templates
-                $templates->{$target}->{'JCW-doi-redirects'}->{$line} = 1;
+                $templates->{$target}->{'doi-redirects'}->{$line} = 1;
             }
             # and output templates
             for my $target (natkeysort { lc $_ } keys %$templates) {
