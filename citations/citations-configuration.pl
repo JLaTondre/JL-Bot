@@ -34,8 +34,14 @@ my $BOTINFO = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
 
 my $CATEGORY = 'Category:Redirects from DOI prefixes';
 
-my $PUBLISHERS   = 'User:JL-Bot/Publishers.cfg';
-my $QUESTIONABLE = 'User:JL-Bot/Questionable.cfg';
+my @PUBLISHER = (
+    'User:JL-Bot/Publishers.cfg'
+);
+my @QUESTIONABLE = (
+    'User:JL-Bot/Questionable.cfg/General',
+    'User:JL-Bot/Questionable.cfg/Publishers',
+    'User:JL-Bot/Questionable.cfg/Journals',
+);
 
 #
 # Subroutines
@@ -119,7 +125,7 @@ sub updatePublisher {
     my $targets = shift;
     my $page = shift;
 
-    print "  updating publisher configuration...\n";
+    print "  updating $page configuration...\n";
 
     my ($original, $timestamp) = $bot->getText($page);
     $original = removeControlCharacters($original);
@@ -188,7 +194,7 @@ sub updateQuestionable {
     my $targets = shift;
     my $page = shift;
 
-    print "  updating questionable configuration...\n";
+    print "  updating $page configuration...\n";
 
     my ($original, $timestamp) = $bot->getText($page);
     $original = removeControlCharacters($original);
@@ -289,8 +295,12 @@ for my $redirect (keys %$redirects) {
 
 # update configuration pages
 
-updatePublisher($bot, $targets, $PUBLISHERS);
-updateQuestionable($bot, $targets, $QUESTIONABLE);
+for my $page (@PUBLISHER) {
+    updatePublisher($bot, $targets, $page);
+}
+for my $page (@QUESTIONABLE) {
+    updateQuestionable($bot, $targets, $page);
+}
 
 my $b1 = Benchmark->new;
 my $bd = timediff($b1, $b0);

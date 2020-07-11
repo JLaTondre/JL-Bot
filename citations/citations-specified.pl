@@ -52,8 +52,14 @@ my $BOTINFO      = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
 
 my $FALSEPOSITIVES = 'User:JL-Bot/Citations.cfg';
 
-my $PUBLISHER = 'User:JL-Bot/Publishers.cfg';
-my $QUESTIONABLE = 'User:JL-Bot/Questionable.cfg';
+my @PUBLISHER = (
+    'User:JL-Bot/Publishers.cfg'
+);
+my @QUESTIONABLE = (
+    'User:JL-Bot/Questionable.cfg/General',
+    'User:JL-Bot/Questionable.cfg/Publishers',
+    'User:JL-Bot/Questionable.cfg/Journals',
+);
 
 my @PUBTABLE = (
     'CREATE TABLE publishers(target TEXT, entries TEXT, entryCount INTEGER, lineCount INTEGER, articles TEXT, citations INTEGER, source TEXT, note TEXT, doi TEXT)',
@@ -618,110 +624,120 @@ sub generateResult {
 
 sub retrieveSpecified {
 
-    # Retrieve the specified targets from a wiki page
+    # Retrieve the specified targets from wiki pages
 
     my $info = shift;
     my $type = shift;
-    my $page = shift;
+    my $pages = shift;
 
     print "  retrieving $type configuration ...\n";
 
     my $bot = mybot->new($info);
 
-    my ($text, $timestamp, $revision) = $bot->getText($page);
-    $text = removeControlCharacters($text);
-
     my $specified;
+    my $newest = 0;
 
-    for my $line (split "\n", $text) {
+    for my $page (@$pages) {
 
-        $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
+        my ($text, $timestamp, $revision) = $bot->getText($page);
+        unless ($text) {
+            die "ERROR: Configuration page not found! --> $page\n";
+        }
+        $text = removeControlCharacters($text);
 
-        if ($line =~ /^\s*\{\{\s*JCW-(selected|pattern|doi-redirects)\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
-            my $template   = $1;
-            my $target     = $2;
-            my $additional = $3;
+        $newest = $revision if ($revision > $newest);
 
-            # pull out source & notes
+        for my $line (split "\n", $text) {
 
-            if (($additional) and ($additional =~ s/(?:^|\|)\s*source\s*=\s*(.*?)\s*(\||$)/$2/)) {
-                my $rationale = $1;
-                $rationale =~ s/##--##(.*?)##--##(.*?)##-##/[[$1|$2]]/g;        # unescape [[this|that]]
-                $specified->{$target}->{'source'} = $rationale;
-            }
+            $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
 
-            if (($additional) and ($additional =~ s/(?:^|\|)\s*note\s*=\s*(.*?)\s*(\||$)/$2/)) {
-                my $rationale = $1;
-                $rationale =~ s/##--##(.*?)##--##(.*?)##-##/[[$1|$2]]/g;        # unescape [[this|that]]
-                $specified->{$target}->{'note'} = $rationale;
-            }
+            if ($line =~ /^\s*\{\{\s*JCW-(selected|pattern|doi-redirects)\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+                my $template   = $1;
+                my $target     = $2;
+                my $additional = $3;
 
-            if ($template eq 'selected') {
+                # pull out source & notes
 
-                $specified->{$target}->{'selected'}->{$target} = 1;
-                if ($additional) {
-                    my @terms = split(/\|/, $additional);
-                    for my $term (@terms) {
-                        next unless ($term);
-                        $term =~ s/^\d+\s*=\s*//;
-                        if ($term =~/^\s*doi\d*\s*=\s*(.+)$/) {
-                            $specified->{$target}->{'doi'}->{$1} = 1;
-                        }
-                        elsif ($term =~/^Category:/) {
-                            my $members = $bot->getCategoryMembers($term);
-                            for my $member (keys %$members) {
-                                $specified->{$target}->{'selected'}->{$member} = 1;
+                if (($additional) and ($additional =~ s/(?:^|\|)\s*source\s*=\s*(.*?)\s*(\||$)/$2/)) {
+                    my $rationale = $1;
+                    $rationale =~ s/##--##(.*?)##--##(.*?)##-##/[[$1|$2]]/g;        # unescape [[this|that]]
+                    $specified->{$target}->{'source'} = $rationale;
+                }
+
+                if (($additional) and ($additional =~ s/(?:^|\|)\s*note\s*=\s*(.*?)\s*(\||$)/$2/)) {
+                    my $rationale = $1;
+                    $rationale =~ s/##--##(.*?)##--##(.*?)##-##/[[$1|$2]]/g;        # unescape [[this|that]]
+                    $specified->{$target}->{'note'} = $rationale;
+                }
+
+                if ($template eq 'selected') {
+
+                    $specified->{$target}->{'selected'}->{$target} = 1;
+                    if ($additional) {
+                        my @terms = split(/\|/, $additional);
+                        for my $term (@terms) {
+                            next unless ($term);
+                            $term =~ s/^\d+\s*=\s*//;
+                            if ($term =~/^\s*doi\d*\s*=\s*(.+)$/) {
+                                $specified->{$target}->{'doi'}->{$1} = 1;
+                            }
+                            elsif ($term =~/^Category:/) {
+                                my $members = $bot->getCategoryMembers($term);
+                                for my $member (keys %$members) {
+                                    $specified->{$target}->{'selected'}->{$member} = 1;
+                                }
+                            }
+                            else {
+                                $specified->{$target}->{'selected'}->{$term} = 1;
                             }
                         }
-                        else {
-                            $specified->{$target}->{'selected'}->{$term} = 1;
+                    }
+
+                }
+                elsif ($template eq 'pattern') {
+
+                    my $exclusion = 'none';
+                    if ($additional) {
+                        # see if exclusion type specified & capture
+                        if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
+                            $exclusion = $1;
+                            if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
+                                warn "$target pattern has unknown exclude type $exclusion in $line\n";
+                                next;
+                            }
+                            $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
+                        }
+                        # pull out patterns
+                        my @terms = split(/\|/, $additional);
+                        for my $term (@terms) {
+                            $term =~ s/^\d+\s*=\s*//;
+                            next unless ($term);
+                            $specified->{$target}->{'pattern'}->{$exclusion}->{$term} = 1;
                         }
                     }
+
                 }
-
-            }
-            elsif ($template eq 'pattern') {
-
-                my $exclusion = 'none';
-                if ($additional) {
-                    # see if exclusion type specified & capture
-                    if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
-                        $exclusion = $1;
-                        if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
-                            warn "$target pattern has unknown exclude type $exclusion in $line\n";
-                            next;
+                elsif ($template eq 'doi-redirects') {
+                    if ($additional) {
+                        my @terms = split(/\|/, $additional);
+                        for my $term (@terms) {
+                            if ($term !~ /^10\.\d{4,5}$/) {
+                                warn "WARNING: unexpected DOI format --> $target --> $term\n$line\n";
+                                next;
+                            }
+                            $specified->{$target}->{'doi'}->{$term} = 1;
                         }
-                        $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
                     }
-                    # pull out patterns
-                    my @terms = split(/\|/, $additional);
-                    for my $term (@terms) {
-                        $term =~ s/^\d+\s*=\s*//;
-                        next unless ($term);
-                        $specified->{$target}->{'pattern'}->{$exclusion}->{$term} = 1;
+                    else {
+                        warn "WARNING: missing DOI parameters --> $target\n$line\n";
                     }
-                }
-
-            }
-            elsif ($template eq 'doi-redirects') {
-                if ($additional) {
-                    my @terms = split(/\|/, $additional);
-                    for my $term (@terms) {
-                        if ($term !~ /^10\.\d{4,5}$/) {
-                            warn "WARNING: unexpected DOI format --> $target --> $term\n$line\n";
-                            next;
-                        }
-                        $specified->{$target}->{'doi'}->{$term} = 1;
-                    }
-                }
-                else {
-                    warn "WARNING: missing DOI parameters --> $target\n$line\n";
                 }
             }
         }
+
     }
 
-    return $specified, $revision;
+    return $specified, $newest;
 }
 
 sub saveResult {
@@ -855,14 +871,14 @@ my $publishers;
 my $questionables;
 
 if ($processPublishers) {
-    ($publishers, my $pRevision) = retrieveSpecified($BOTINFO, 'publisher', $PUBLISHER);
+    ($publishers, my $pRevision) = retrieveSpecified($BOTINFO, 'publisher', \@PUBLISHER);
     $sth = $dbSpecific->prepare('INSERT INTO revisions VALUES (?, ?)');
     $sth->execute('publisher', $pRevision);
     $dbSpecific->commit;
 }
 
 if ($processQuestionable) {
-    ($questionables, my $qRevision) = retrieveSpecified($BOTINFO, 'questionable', $QUESTIONABLE);
+    ($questionables, my $qRevision) = retrieveSpecified($BOTINFO, 'questionable', \@QUESTIONABLE);
     $sth = $dbSpecific->prepare('INSERT INTO revisions VALUES (?, ?)');
     $sth->execute('questionable', $qRevision);
     $dbSpecific->commit;
