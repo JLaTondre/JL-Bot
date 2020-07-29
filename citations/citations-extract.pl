@@ -137,6 +137,8 @@ sub extractField {
     $citation =~ s/\[\[[^\{\]]*\s*\{\{\s*!\s*\}\}\s*([^\]]+)\]\]/$1/g;      # remove link from [[link{{!}}text]]
     $citation =~ s/\[\[\s*([^\]]+)\s*\]\]/$1/g;                             # remove link from [[text]]
 
+    $citation =~ s/\{\{\s*subst:/{{/g;                       # remove subst:
+
     $citation = removeTemplates($citation);
 
     my $results;
@@ -244,6 +246,8 @@ sub removeTemplates {
 
         my $start = $template;
 
+        # several of these could be collapsed (conditional, or) but are left separate for simplicity | readability
+
         $template =~ s/\{\{\s*URL\s*\|[^\|]+\|\s*(.+?)\s*\}\}/$1/g;     # remove link from {{URL|link|text}}
 
         $template =~ s/\s*\{\{\s*dead link\s*(?:\|.*?)?\}\}//ig;        # remove {{Dead link|date=...}}
@@ -326,6 +330,7 @@ sub removeTemplates {
         $template =~ s/\{\{\s*shy\s*\}\}//ig;                           # remove {{shy}}
 
         $template =~ s/\{\{\s*'\s*\}\}/'/ig;                            # replace {{'}}
+        $template =~ s/\{\{\s*=\s*\}\}/=/ig;                            # replace {{=}}
         $template =~ s/\{\{\s*colon\s*\}\}/:/ig;                        # replace {{colon}}
 
         $template =~ s/,?\s*\{\{\s*ODNBsub\s*\}\}//ig;                  # remove {{ODNBsub}}
@@ -333,6 +338,7 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*paywall\s*\}\}//ig;                    # remove {{paywall}}
         $template =~ s/\s*\{\{\s*registration required\s*\}\}//ig;      # remove {{registration required}}
 
+        $template =~ s/\s*\{\{\s*subscription needed\s*(?:\|.*?)?\}\}//ig;    # remove {{subscription needed|remove}}
         $template =~ s/\s*\{\{\s*subscription required\s*(?:\|.*?)?\}\}//ig;  # remove {{subscription required|remove}}
         $template =~ s/\s*\{\{\s*subscription\s*(?:\|.*?)?\}\}//ig;           # remove {{subscription|remove}}
 
@@ -348,6 +354,11 @@ sub removeTemplates {
         $template =~ s/\{\{\s*nowrap\s*\|([^\}]+)\}\}/$1/ig;            # remove {{nowrap|text}}
         $template =~ s/\{\{\s*noitalic\s*\|([^\}]+)\}\}/$1/ig;          # remove {{noitalic|text}}
         $template =~ s/\{\{\s*smallcaps\s*\|([^\}]+)\}\}/$1/ig;         # remove {{smallcaps|text}}
+
+        $template =~ s/\{\{\s*lc\s*\|([^\}]+)\}\}/\l$1/ig;              # remove {{lc|text}} where kept text is converted to lowercase
+
+        $template =~ s/\s*\{\{\s*\^\s*\|([^\}]+)\}\}//ig;               # remove {{^|remove}}
+        $template =~ s/\s*\{\{\s*void\s*\|([^\}]+)\}\}//ig;             # remove {{void|remove}}
 
         $template =~ s/\{\{\s*chem\s*\|\s*CO\s*\|\s*2\s*\}\}/CO2/ig;    # replace {{chem|CO|2}}
 
