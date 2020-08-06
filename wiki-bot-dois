@@ -19,7 +19,7 @@ function findLatestRegistrants() {
 
 # command line arguments
 
-while getopts r option
+while getopts hr option
 do
     case "${option}"
     in
