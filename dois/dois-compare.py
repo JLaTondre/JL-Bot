@@ -100,8 +100,8 @@ for argument, value in arguments:
 
 files = glob.glob(os.environ['WIKI_WORKING_DIR'] + '/Dois/doi-registrants-*')
 
-currentFile = files[-1]
-priorFile = files[-2]
+currentFile = sorted(files)[-1]
+priorFile = sorted(files)[-2]
 
 print('Comparing', os.path.basename(currentFile), 'with', os.path.basename(priorFile), '...')
 
