@@ -184,7 +184,7 @@ except Exception:
 # iterate through input file
 
 files = glob.glob(os.environ['WIKI_WORKING_DIR'] + '/Dois/doi-registrants-*')
-filename = files[-1]
+filename = sorted(files)[-1]
 
 print('FILE =', filename)
 
