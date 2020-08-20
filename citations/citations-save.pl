@@ -8,6 +8,7 @@ use strict;
 use DateTime;
 use File::Basename;
 use Getopt::Std;
+use Sort::Key::Natural qw( natkeysort );
 use Switch;
 use URI::Escape qw( uri_escape_utf8 );
 
@@ -87,31 +88,6 @@ my %SHORTCUT = (
 # Subroutines
 #
 
-sub compare {
-
-    # Custom cmp routine to get the necessary sort order.
-
-    my $oa = shift;
-    my $ob = shift;
-
-    (my $na = $oa) =~ s/^(?:(?:The|Les?|La) |L')//i;
-    (my $nb = $ob) =~ s/^(?:(?:The|Les?|La) |L')//i;
-
-    # if they are the same (one with & one w/o "The"), compare originals so sorted consistently
-
-    if ($na eq $nb) {
-        my $result = (lc $oa cmp lc $ob);
-        return $result if ($result);          # return lc result if not the same
-        return ($oa cmp $ob);                 # return original case result otherwise
-    }
-
-    # if not the same, compare without
-
-    my $result = (lc $na cmp lc $nb);
-    return $result if ($result);            # return lc result if not the same
-    return ($na cmp $nb);                   # return original case result otherwise
-}
-
 sub generateIndividual {
 
     # Generate individual results (by type & letter) from database
@@ -148,7 +124,7 @@ sub generateIndividual {
 
     my @results;
 
-    for my $citation (sort { compare($a, $b) } keys %$records) {
+    for my $citation (sort { sortCitations($a, $b) } keys %$records) {
 
         my $record = $records->{$citation};
 
@@ -233,7 +209,7 @@ sub generatePopular {
 
         my $rank = $number;
 
-        for my $citation (sort { compare($a, $b) } keys %{$records->{$cCount}}) {
+        for my $citation (sort { sortCitations($a, $b) } keys %{$records->{$cCount}}) {
 
             $number++;
 
@@ -324,7 +300,7 @@ sub generateMissing {
 
         my $rank = $number;
 
-        for my $citation (sort { compare($a, $b) } keys %{$records->{$cCount}}) {
+        for my $citation (sort { sortCitations($a, $b) } keys %{$records->{$cCount}}) {
 
             $number++;
 
@@ -848,6 +824,54 @@ sub saveInvalid {
     return;
 }
 
+sub sortCitations {
+
+    # sort citations in proper order
+
+    my $oa = shift;
+    my $ob = shift;
+
+    (my $na = $oa) =~ s/^(?:(?:The|Les?|La) |L')//i;
+    (my $nb = $ob) =~ s/^(?:(?:The|Les?|La) |L')//i;
+
+    # if they are the same (one with & one w/o "The"), compare originals so sorted consistently
+
+    if ($na eq $nb) {
+        my $result = (lc $oa cmp lc $ob);
+        return $result if ($result);          # return lc result if not the same
+        return ($oa cmp $ob);                 # return original case result otherwise
+    }
+
+    # if not the same, compare without
+
+    my $result = (lc $na cmp lc $nb);
+    return $result if ($result);            # return lc result if not the same
+    return ($na cmp $nb);                   # return original case result otherwise
+}
+
+sub sortTemplates {
+
+    # sort templates in selected, pattern, doi order
+    # this same function is used in citations-configuration, but sort
+    # functions need to be local to file and not imported
+
+    my %order = (
+        'selected'      => 1,
+        'pattern'       => 2,
+        'doi-redirects' => 3,
+    );
+
+    unless (exists $order{$a}) {
+        die "ERROR: template type unknown --> $a";
+    }
+
+    unless (exists $order{$b}) {
+        die "ERROR: template type unknown --> $b";
+    }
+
+    return $order{$a} <=> $order{$b};
+}
+
 sub typoRevision {
 
     my $date = DateTime->now;
@@ -1253,12 +1277,15 @@ if ($saveFPCounts) {
     my ($text, $timestamp) = $bot->getText($FALSEPOSITIVES);
 
     my $output = '';
+    my $templates;
+
     for my $line (split "\n", $text) {
         if ($line =~ /^\s*\{\{\s*([JM]CW-exclude)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*(?:\|\s*c\s*=\s*\d+\s*)?\}\}\s*$/i) {
+            # update templates & save within a section
             my $type   = $1;
             my $target = $2;
             my $entry  = $3;
-            $output .= "{{$type|$target|$entry";
+            my $new .= "{{$type|$target|$entry";
 
             $entry =~ s/^\d+\s*=\s*//;
             my $sth = $database->prepare('
@@ -1274,10 +1301,25 @@ if ($saveFPCounts) {
                 $count += $ref->{'cCount'};
             }
 
-            $output .= "|c=$count}}\n";
+            $new .= "|c=$count}}";
+            $templates->{$target}->{'exclude'}->{$new} = 1;
+
+        }
+        elsif ($line =~ /^\s*\}\}\s*$/) {
+            # end of section so output sorted templates
+            for my $target (natkeysort { lc $_ } keys %$templates) {
+                for my $template (sort sortTemplates keys %{$templates->{$target}}) {
+                    for my $line (sort keys %{$templates->{$target}->{$template}}) {
+                        $output .= "$line\n";
+                    }
+                }
+            }
+            $output .= "}}\n";
+            $templates = {};
 
         }
         else {
+            # pass through other lines
             $output .= "$line\n";
         }
     }
