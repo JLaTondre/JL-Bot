@@ -38,6 +38,7 @@ unless (exists $ENV{'WIKI_WORKING_DIR'}) {
 
 my $DBTITLES   = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-titles.sqlite3';
 my $INDIVIDUAL = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-individual.sqlite3';
+my $REGFILE    = $ENV{'WIKI_WORKING_DIR'} . '/Citations/doi-registrants';
 my $BOTINFO    = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
 my $PREFIXES   = dirname(__FILE__) . '/interwiki-prefixes.cfg';
 
@@ -47,32 +48,6 @@ my $MAIN = 'Template:JCW-Main';
 #
 # Subroutines
 #
-
-sub buildTemplatePattern {
-
-    # Build an OR pattern for matching templates
-    # Similar to what is in parse, could refactor into common
-
-    my $bot      = shift;
-    my $template = shift;
-
-    print "  building template pattern ...\n";
-
-    my $pattern = $template . '|';
-
-    my $redirects = $bot->getRedirects($template, 10);
-    for my $redirect (sort keys %$redirects) {
-        $pattern .= $redirect . '|';
-    }
-
-    $pattern =~ s/Template://g;
-    $pattern =~ s/ /\[ _\]\+/g;
-    $pattern =~ s/\|$//;
-
-    $pattern = qr/\{\{\s*(?:Template\s*:\s*)?(?:$pattern)\s*/i;
-
-    return $pattern;
-}
 
 sub determineFormat {
 
@@ -146,38 +121,6 @@ sub determinePage {
     }
 
     die "ERROR: should not reach here (determinePage): number = $number\n";
-}
-
-sub determineRegistrant {
-
-    # Determine registrant from Wikipedia page (if exists)
-
-    my $bot = shift;
-    my $prefix = shift;
-    my $pattern = shift;
-
-    my ($text, $timestamp) = $bot->getText($prefix);
-
-    return '' unless ($text);
-
-    if ($text =~ /$pattern\|\s*registrant\s*=\s*(.+?)\s*[\|\}]/i) {
-        return $1;
-    }
-
-    if ($text =~ /^\s*#redirect\s*:?\s*\[\[\s*:?\s*(.+?)\s*(?:\]|(?<!&)#|\n|\|)/i) {
-        # partially shared with parse, could refactor into common
-        my $target = $1;
-        $target = decode_entities($target);
-        $target =~ s/%26/&/;
-        $target =~ tr/_/ /;
-        $target =~ s/ {2,}/ /g;
-        $target =~ s/^ //;
-        $target =~ s/ $//;
-        $target = ucfirst $target;
-        return $target;
-    }
-
-    return '';
 }
 
 sub formatArticles {
@@ -283,6 +226,31 @@ sub loadCitations {
     $database->disconnect;
 
     return $results;
+}
+
+sub loadRegistrants {
+
+    # Returns known registrants from file
+
+    my $regFile = shift;
+
+    print "  loading registrants ...\n";
+
+    open INPUT, '<:utf8', $REGFILE
+        or die "ERROR: Could not open file ($regFile)\n  --> $!\n\n";
+
+    my $registrants;
+
+    while (<INPUT>) {
+        if (/^(10\.\d{4,5})\t(.+)$/) {
+            $registrants->{$1} = $2;
+        }
+        else {
+            die "ERROR: Unknown DOI registrant line! -->\n  $_\n";
+        }
+    }
+
+    return $registrants;
 }
 
 sub queryTitle {
@@ -425,12 +393,12 @@ my $bot = mybot->new($BOTINFO);
 
 # preparation
 
-my $pattern = buildTemplatePattern($bot, $DOIREDIRECT);
 my $interwikiPrefixes = loadInterwiki($PREFIXES);
 my $pages = retrievePages($bot, $MAIN);
 
-# query doi citations
+# load registrants & doi citations
 
+my $registrants = loadRegistrants($REGFILE);
 my $dois = loadCitations($INDIVIDUAL);
 
 # open titles database
@@ -454,7 +422,7 @@ for my $prefix (sort sortPrefixes keys %$dois) {
     my $cCount = $dois->{$prefix}->{'count'};
 
     my $registrant = '';
-    $registrant = determineRegistrant($bot, $prefix, $pattern) unless ($prefix =~ /^Invalid:/);
+    $registrant = $registrants->{$prefix} if (exists $registrants->{$prefix});
 
     my $doi = $prefix;
     $doi =~ s/^Invalid: //;
@@ -531,7 +499,7 @@ unless (exists $results->{'Invalid'}) {
 
 if ($print) {
     print "  generating output file ...\n";
-    my $file = $ENV{'WIKI_WORKING_DIR'} . '/../x-doi-' . strftime('%H%M%S', localtime);
+    my $file = $ENV{'WIKI_WORKING_DIR'} . '/x-doi-' . strftime('%H%M%S', localtime);
     open OUTPUT, '>:utf8', $file
         or die "ERROR: could not open file ($file)!\n$!\n";
     for my $index (sort sortPrefixes keys %$results) {
