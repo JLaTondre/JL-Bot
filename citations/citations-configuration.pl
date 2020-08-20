@@ -87,7 +87,7 @@ sub findTarget {
 
 sub sortPrefixes {
 
-    # Sort prefixes so that order is 4-digits, 5-digits
+    # sort prefixes so that order is 4-digits, 5-digits
 
     return  0 if ($a eq $b);
 
@@ -99,6 +99,8 @@ sub sortPrefixes {
 sub sortTemplates {
 
     # sort templates in selected, pattern, doi order
+    # this same function is used in citations-save, but sort
+    # functions need to be local to file and not imported
 
     my %order = (
         'selected'      => 1,
