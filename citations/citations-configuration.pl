@@ -26,10 +26,15 @@ unless (exists $ENV{'WIKI_CONFIG_DIR'}) {
     die "ERROR: WIKI_CONFIG_DIR environment variable not set\n";
 }
 
+unless (exists $ENV{'WIKI_WORKING_DIR'}) {
+    die "ERROR: WIKI_WORKING_DIR environment variable not set\n";
+}
+
 #
 # Configuration & Globals
 #
 
+my $REGFILE = $ENV{'WIKI_WORKING_DIR'} . '/Citations/doi-registrants';
 my $BOTINFO = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
 
 my $CATEGORY = 'Category:Redirects from DOI prefixes';
@@ -55,7 +60,7 @@ sub findRegistrant {
 
     my $registrant;
 
-    if ($text =~ /\|\s*registrant\s*=\s*(.*?)(?:\||\})/) {
+    if ($text =~ /\|\s*registrant\s*=\s*(.*?)\s*(?:\||\})/) {
         $registrant = $1;
     }
 
@@ -268,11 +273,16 @@ my $b0 = Benchmark->new;
 
 my $bot = mybot->new($BOTINFO);
 
+open OUTPUT, '>:utf8', $REGFILE
+    or die "ERROR: Could not open file ($REGFILE)\n  --> $!\n\n";
+
 # process DOI redirects
 
-print "  processing DOI redirects ...\n";
+print "  retrieving DOI redirects ...\n";
 
 my $redirects = $bot->getCategoryMembers($CATEGORY);
+
+print "  processing DOI redirects ...\n";
 
 my $targets;
 
@@ -288,12 +298,21 @@ for my $redirect (keys %$redirects) {
     my $initial = initial($target);
     $targets->{$initial}->{$target}->{$redirect} = 1;
 
+    # configuration updated based on registrant and redirect
+    # for registrant file, registrants are preferred, but output redirect if not registrant
+
     my $registrant = findRegistrant($text);
     if ($registrant) {
         $initial = initial($registrant);
         $targets->{$initial}->{$registrant}->{$redirect} = 1;
+        print OUTPUT "$redirect\t$registrant\n";
+    }
+    else {
+        print OUTPUT "$redirect\t$target\n";
     }
 }
+
+close OUTPUT;
 
 # update configuration pages
 
