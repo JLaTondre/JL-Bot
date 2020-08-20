@@ -330,7 +330,7 @@ for my $type (sort keys %templates) {
                     next;
                 }
 
-                print "    saving change...\n\n";
+                print "    saving change ...\n\n";
 
                 my $commsg = 'removing stale ' . lc($type) . " template as last edited $dDays days ago";
 

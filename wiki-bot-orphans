@@ -211,7 +211,7 @@ sub deorphan {
         push @problems, $page;
     }
     else {
-        print "  saving change...\n\n";
+        print "  saving change ...\n\n";
         my $commsg = "removing orphan template as not a valid orphan";
         $bot->saveText($page, $timestamp, $new, $commsg, 'Minor', 'Bot');
     }

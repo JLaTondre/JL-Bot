@@ -362,7 +362,7 @@ push @statistics, doiStatistics($CITATIONS);
 
 if ($print) {
     print "  generating output file ...\n";
-    my $file = $ENV{'WIKI_WORKING_DIR'} . '/../x-statistics-' . strftime('%H%M%S', localtime);
+    my $file = $ENV{'WIKI_WORKING_DIR'} . '/x-statistics-' . strftime('%H%M%S', localtime);
     open OUTPUT, '>:utf8', $file
         or die "ERROR: could not open file ($file)!\n$!\n";
     for my $statistic (@statistics) {

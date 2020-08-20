@@ -230,7 +230,7 @@ else
 
     if [ "$COMMON" -gt 0 ] || [ "$QUESTIONABLE" -gt 0 ] || [ "$PUBLISHERS" -gt 0 ] || [ "$MAINTENANCE" -gt 0 ]
     then
-        echo "Creating copy..."
+        echo "Creating copy ..."
         cp -r Citations Citations-${LATEST}-${TIMESTAMP}
 
         if [ "$COMMON" -gt 0 ]
