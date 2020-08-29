@@ -159,9 +159,9 @@ else:
     currentDate = extractDate(currentFile)
     priorDate = extractDate(priorFile)
 
-    output = 'This page list differences in the CrossRef registrants between the '
-    output += priorDate + ' and ' + currentDate + ' results:\n'
+    output = 'This page list differences in the CrossRef registrants between the prior and current results:\n'
     output += '{| class="wikitable sortable"\n|-\n'
+    output += '! DOI !! Prior (' + priorDate + ') || Current (' + currentDate + ')\n|-\n'
     output += '\n|-\n'.join(results)
     output += '\n|}'
 

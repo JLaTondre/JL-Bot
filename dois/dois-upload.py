@@ -79,36 +79,48 @@ def formatLine(line):
     # line is:
     # prefix, crossref registrant, wikipedia registrant, crossref target, wikipedia target
 
+    prefix = line[0]
+    crossrefRegistrant = line[1]
+    wikipediaRegistrant = line[2]
+    crossrefTarget = line[3]
+    wikipediaTarget = line[4]
+
     result = '{{JCW-DOI-prefix'
-    result += '|' + line[0]
+    result += '|' + prefix
 
     # Crossref registrant
 
-    if line[1] == 'NONE':
+    if crossrefRegistrant == 'NONE':
         result += '|-'
     else:
-        result += '|' + line[1]
+        result += '|' + crossrefRegistrant
 
     # Wikipedia registrant
 
-    if line[2] == 'NONE':
+    if wikipediaRegistrant == 'NONE':
         result += '|-'
     else:
-        result += '|' + line[2]
+        result += '|' + wikipediaRegistrant
 
     # Target
 
-    if line[3] == 'NONE' and line[4] == 'NONE':
+    if wikipediaTarget.startswith('Category:'):
+        wikipediaTarget = ':' + wikipediaTarget
+
+    if crossrefTarget.startswith('Category:'):
+        crossrefTarget = ':' + crossrefTarget
+
+    if crossrefTarget == 'NONE' and wikipediaTarget == 'NONE':
         result += '|-'
-    elif line[3] == 'NONE':
-        result += '|' + line[4]
-    elif line[4] == 'NONE':
-        result += '|' + line[3]
-    elif line[3] != line[4]:
-        result += '|4=Crossref = [[' + line[3] + ']]<br/>'
-        result += 'Wikipedia = [[' + line[4] + ']]'
+    elif crossrefTarget == 'NONE':
+        result += '|' + wikipediaTarget
+    elif wikipediaTarget == 'NONE':
+        result += '|' + crossrefTarget
+    elif crossrefTarget != wikipediaTarget:
+        result += '|4=Crossref = [[' + crossrefTarget + ']]<br/>'
+        result += 'Wikipedia = [[' + wikipediaTarget + ']]'
     else:
-        result += '|' + line[3]
+        result += '|' + crossrefTarget
 
     result += '}}\n'
 

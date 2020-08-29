@@ -78,6 +78,12 @@ def extractRecords(contents):
             if wikipediaTarget == '-':
                 wikipediaTarget = 'NONE'
 
+            if crossrefTarget.startswith(':'):
+                crossrefTarget = crossrefTarget[1:]
+
+            if wikipediaTarget.startswith(':'):
+                wikipediaTarget = wikipediaTarget[1:]
+
             records.append((prefix, crossrefRegistrant, wikipediaRegistrant, crossrefTarget, wikipediaTarget))
 
     return records
