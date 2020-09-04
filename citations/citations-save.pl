@@ -8,7 +8,6 @@ use strict;
 use DateTime;
 use File::Basename;
 use Getopt::Std;
-use Sort::Key::Natural qw( natkeysort );
 use Switch;
 use URI::Escape qw( uri_escape_utf8 );
 
@@ -827,6 +826,8 @@ sub saveInvalid {
 sub sortCitations {
 
     # sort citations in proper order
+    # this same function is used in citations-configuration, but sort
+    # functions need to be local to file and not imported
 
     my $oa = shift;
     my $ob = shift;
@@ -1307,7 +1308,7 @@ if ($saveFPCounts) {
         }
         elsif ($line =~ /^\s*\}\}\s*$/) {
             # end of section so output sorted templates
-            for my $target (natkeysort { lc $_ } keys %$templates) {
+            for my $target (sort { sortCitations($a, $b) } keys %$templates) {
                 for my $template (sort sortTemplates keys %{$templates->{$target}}) {
                     for my $line (sort keys %{$templates->{$target}->{$template}}) {
                         $output .= "$line\n";
