@@ -8,7 +8,6 @@ use strict;
 use Benchmark;
 use File::Basename;
 use HTML::Entities;
-use Sort::Key::Natural qw( natkeysort );
 
 use lib dirname(__FILE__) . '/../modules';
 
@@ -101,6 +100,33 @@ sub sortPrefixes {
     return $a <=> $b;
 }
 
+sub sortCitations {
+
+    # sort citations in proper order
+    # this same function is used in citations-save, but sort
+    # functions need to be local to file and not imported
+
+    my $oa = shift;
+    my $ob = shift;
+
+    (my $na = $oa) =~ s/^(?:(?:The|Les?|La) |L')//i;
+    (my $nb = $ob) =~ s/^(?:(?:The|Les?|La) |L')//i;
+
+    # if they are the same (one with & one w/o "The"), compare originals so sorted consistently
+
+    if ($na eq $nb) {
+        my $result = (lc $oa cmp lc $ob);
+        return $result if ($result);          # return lc result if not the same
+        return ($oa cmp $ob);                 # return original case result otherwise
+    }
+
+    # if not the same, compare without
+
+    my $result = (lc $na cmp lc $nb);
+    return $result if ($result);            # return lc result if not the same
+    return ($na cmp $nb);                   # return original case result otherwise
+}
+
 sub sortTemplates {
 
     # sort templates in selected, pattern, doi order
@@ -172,7 +198,7 @@ sub updatePublisher {
                 $templates->{$target}->{'doi-redirects'}->{$line} = 1;
             }
             # and output templates
-            for my $target (natkeysort { lc $_ } keys %$templates) {
+            for my $target (sort { sortCitations($a, $b) } keys %$templates) {
                 for my $template (sort sortTemplates keys %{$templates->{$target}}) {
                     for my $line (sort keys %{$templates->{$target}->{$template}}) {
                         $updated .= "$line\n";
@@ -222,7 +248,7 @@ sub updateQuestionable {
         }
         elsif ($line =~ /^\s*\}\}\s*$/) {
             # end of section so output sorted templates
-            for my $target (natkeysort { lc $_ } keys %$templates) {
+            for my $target (sort { sortCitations($a, $b) } keys %$templates) {
                 for my $template (sort sortTemplates keys %{$templates->{$target}}) {
                     for my $line (sort keys %{$templates->{$target}->{$template}}) {
                         $updated .= "$line\n";
