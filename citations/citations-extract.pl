@@ -421,7 +421,7 @@ sub validateDoi {
         if ($prefix < 10.1) {
             $result->{'prefix'} = 'INVALID';
         }
-        elsif (($prefix =~ /10\.\d{5}/) and ($prefix > 10.4)) {
+        elsif (($prefix =~ /10\.\d{5}/) and ($prefix > 10.5)) {
             $result->{'prefix'} = 'INVALID';
         }
         else {

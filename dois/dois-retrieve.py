@@ -265,7 +265,7 @@ except Exception:
 
 file = open(filename, option, 1)
 
-for suffix in tqdm(range(start, 40000), leave=False):
+for suffix in tqdm(range(start, 50000), leave=False):
     start = time.time()
     prefix = '10.' + str(suffix)
     crossref = queryCrossref(prefix, API, email)
