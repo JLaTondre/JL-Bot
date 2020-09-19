@@ -1323,12 +1323,14 @@ for my $update (sort keys %$toUpdate) {
                     if (($dykblurb) and ($type eq 'content-did-you-know-articles')) {
                         $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
                         $listing = $pageInfo->{$page}->{blurb};
-                        if ($dykseen->{$listing}) {
+                        (my $normalized = $listing) =~ s/(?:&nbsp;|\s)+/ /g;        # normalize &nbsp; and whitespace (included due to unicode spaces)
+                        if ($dykseen->{$normalized}) {
 
                             # when two pages have the same dyk skip it
                             $count--;
                             next;
                         }
+                        $dykseen->{$normalized} = 1;
                         $dykseen->{$listing} = 1;
                         if (($dykblurb > 1) and ($count > $dykblurb) and (not $noinclude)) {
                             $output .= "<noinclude>\n";
