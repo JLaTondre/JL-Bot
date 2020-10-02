@@ -1423,7 +1423,7 @@ for my $update (sort keys %$toUpdate) {
 
                 my $total = scalar(keys %{$results->{$type}});
 
-                $output .= "<gallery>\n";
+                $output .= "<gallery mode=packed heights=200px>\n";
 
                 for my $sort (sort keys %{$results->{$type}}) {
                     my $page = $results->{$type}->{$sort};
