@@ -724,6 +724,9 @@ sub parseDYKDates {
             if ( ($date) and ($year) ) {
                 my $ezdate = Date::EzDate->new("$date $year");
                 $result = $ezdate->{'%Y-%m-%d'};
+                # if date found, return it
+                # otherwise see if article history has date
+                return $result;
             }
             else {
                 $result = '0000-00-00';
@@ -740,6 +743,7 @@ sub parseDYKDates {
 
     if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*dykdate\s*=\s*(?:\[\[\s*)?([\w\d\s,\-]+)/ims) {
         my $date = $1;
+        chomp $date;
 
         if ($date) {
             my $ezdate = Date::EzDate->new($date);
