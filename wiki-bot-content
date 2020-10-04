@@ -643,6 +643,14 @@ sub parseDYKBlurb {
                     # remove new lines
                     $blurb =~ s/\n//g;
 
+                    # handle case where template termination is not on separate line
+                    # only remove uneven ones as blurb could contain a template
+                    if ($blurb =~ /\}\}$/) {
+                        my $starting = () = $blurb =~ /\{\{/gi;
+                        my $ending = () = $blurb =~ /\}\}/g;
+                        $blurb =~ s/\}\}\s*$// if ($ending > $starting);
+                    }
+
                     # strip off excess fields
                     $blurb =~ s/\s*\|\s*action\d.*$//;
                     $blurb =~ s/\s*\|\s*action\ddate.*$//;
