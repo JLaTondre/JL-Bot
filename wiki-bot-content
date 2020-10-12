@@ -623,6 +623,7 @@ sub parseDYKBlurb {
                 $blurb =~ s/\s*\|\s*small\s*=[^\|]+//;
                 $blurb =~ s/\{\{\s*\*\s*mp\s*\}\}//;
                 $blurb =~ s/<!--.*?-->//;
+                $blurb =~ s/\|\s*$//;
 
                 # if only year returned, then no blurb was provided
                 $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>" if ($blurb =~ /^\d+$/);
