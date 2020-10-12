@@ -213,6 +213,7 @@ sub getParameters {
     my $small        = 0;
     my $dykblurb     = 0;
     my $italicize    = 0;
+    my $gallery      = 0;
 
     my %duplicate    = ();            # use to ignore duplicate content types
 
@@ -379,6 +380,12 @@ sub getParameters {
             $italicize = 1;
         }
 
+        # look for 'gallery-heights' parameter
+
+        if (/^\s*gallery-heights\s*=\s*(\d+)(?:px)?\s*$/i) {
+            $gallery = $1;
+        }
+
     }
 
     # validate parameters
@@ -474,6 +481,7 @@ sub getParameters {
     print "  small         = $small\n" if ($small);
     print "  dyk-blurb     = $dykblurb\n" if ($dykblurb);
     print "  italics       = $italicize\n" if ($italicize);
+    print "  gallery       = $gallery\n" if ($gallery);
     print "\n";
 
     # store parameters
@@ -511,6 +519,7 @@ sub getParameters {
     $parameters->{small}        = $small;
     $parameters->{dykblurb}     = $dykblurb;
     $parameters->{italicize}    = $italicize;
+    $parameters->{gallery}      = $gallery;
 
     return $parameters;
 }
@@ -1101,6 +1110,7 @@ for my $update (sort keys %$toUpdate) {
     my $small        = $parameters->{small};
     my $dykblurb     = $parameters->{dykblurb};
     my $italicize    = $parameters->{italicize};
+    my $gallery      = $parameters->{gallery};
 
     # retrieve pages in the content types requested
 
@@ -1435,7 +1445,9 @@ for my $update (sort keys %$toUpdate) {
 
                 my $total = scalar(keys %{$results->{$type}});
 
-                $output .= "<gallery mode=packed heights=200px>\n";
+                $output .= "<gallery mode=packed";
+                $output .= " heights=" . $gallery . "px" if ($gallery);
+                $output .= ">\n";
 
                 for my $sort (sort keys %{$results->{$type}}) {
                     my $page = $results->{$type}->{$sort};
