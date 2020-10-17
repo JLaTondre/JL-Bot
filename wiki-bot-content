@@ -696,6 +696,8 @@ sub parseDYKBlurb {
         $blurb = 'NONE';
     }
 
+    $blurb =~ s/^...that/... that/;        # normalize start so always space after ellipse
+
     return $blurb
 }
 
