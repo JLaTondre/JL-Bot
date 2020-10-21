@@ -616,11 +616,11 @@ sub parseDYKBlurb {
                 $blurb =~ s/\n//g;
 
                 # strip off excess fields
-                $blurb =~ s/\s*\|\s*article\s*=[^\|]+//;
-                $blurb =~ s/\s*\|\s*image\s*=[^\|]+//;
-                $blurb =~ s/\s*\|\s*nompage\s*=[^\|]+//;
-                $blurb =~ s/\s*\|\s*views\s*=[^\|]+//;
-                $blurb =~ s/\s*\|\s*small\s*=[^\|]+//;
+                $blurb =~ s/(?:^|\s*\|)\s*article\s*=[^\|]+//;
+                $blurb =~ s/(?:^|\s*\|)\s*image\s*=[^\|]+//;
+                $blurb =~ s/(?:^|\s*\|)\s*nompage\s*=[^\|]+//;
+                $blurb =~ s/(?:^|\s*\|)\s*views\s*=[^\|]+//;
+                $blurb =~ s/(?:^|\s*\|)\s*small\s*=[^\|]+//;
                 $blurb =~ s/\{\{\s*\*\s*mp\s*\}\}//;
                 $blurb =~ s/<!--.*?-->//;
                 $blurb =~ s/\|\s*$//;
