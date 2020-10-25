@@ -357,9 +357,9 @@ sub findRedirectExpansions {
         my $sth = $database->prepare('
             SELECT i.citation, i.target, i.dFormat, i.cCount, i.aCount, c.article, n.normalization
             FROM individuals AS i, citations AS c, normalizations AS n
-            WHERE i.type = c.type
-            AND c.type = n.type
-            AND i.type = ?
+            WHERE i.type = ?
+            AND c.type = ?
+            AND n.type = ?
             AND i.citation = c.citation
             AND i.citation = n.citation
             AND i.citation LIKE ?
@@ -369,7 +369,9 @@ sub findRedirectExpansions {
             )
         ');
         $sth->bind_param(1, $type);
-        $sth->bind_param(2, $candidate);
+        $sth->bind_param(2, $type);
+        $sth->bind_param(3, $type);
+        $sth->bind_param(4, $candidate);
         $sth->execute();
 
         while (my $ref = $sth->fetchrow_hashref()) {
