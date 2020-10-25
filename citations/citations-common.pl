@@ -113,7 +113,6 @@ sub generateResult {
     my $falsePositives = shift;
     my $type = shift;
     my $dbCommon = shift;
-    my $dbTitles = shift;
 
     my $citations = {};             # citation format, counts, & articles
 
@@ -430,7 +429,6 @@ for my $type (@TYPES) {
             $falsePositives,
             $type,
             $dbCommon,
-            $dbTitles
         );
         saveResult($dbCommon, $type, $target, $result);
     }
