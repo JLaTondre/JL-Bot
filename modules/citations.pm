@@ -32,6 +32,7 @@ our @EXPORT_OK = qw(
     normalizeCitation
     queryDate
     removeControlCharacters
+    requiresColon
     retrieveFalsePositives
     setFormat
 );
@@ -801,6 +802,26 @@ sub removeControlCharacters {
     return $text;
 }
 
+sub requiresColon {
+
+    # Check if a page name requires a colon for a proper link
+
+    my $page = shift;
+
+    # check for 'special' Wikipedia page names
+
+    return 1 if ($page =~ /^(?:\/|Category\s*:|File\s*:|Image\s*:)/i);
+
+    # check for wgUrlProtocols
+    # https://www.mediawiki.org/wiki/Manual:$wgUrlProtocols
+
+    return 1 if ($page =~ /^(?:bitcoin|geo|magnet|mailto|news|sips?|sms|tel|urn|xmpp)\s*:/i);
+    return 1 if ($page =~ /^(?:ftps?|git|gopher|https?|ircs?|mms|nntp|redis|sftp|ssh|svn|telnet|worldwind):\/\//i);
+    return 1 if ($page =~ /^\/\//);
+
+    return 0;
+}
+
 sub retrieveFalsePositives {
 
     # Retrieve false positives from wiki page.
@@ -850,13 +871,13 @@ sub retrieveFalsePositives {
 
 sub setFormat {
 
-    # Returns the formated citation | target for the specified format
+    # Returns the formatted citation | target for the specified format
 
     my $type   = shift;
     my $record = shift;
     my $format = shift;
 
-    $record = ":$record" if ($record =~ /^(?:\/|Category\s*:|File\s*:|Image\s*:)/i);
+    $record = ":$record" if (requiresColon($record));
 
     if ($type eq 'display') {
         $_ = $record;

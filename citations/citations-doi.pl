@@ -14,7 +14,7 @@ use POSIX qw(strftime);
 
 use lib dirname(__FILE__) . '/../modules';
 
-use citations qw( checkInterwiki loadInterwiki queryDate setFormat );
+use citations qw( checkInterwiki loadInterwiki queryDate requiresColon setFormat );
 use citationsDB;
 use mybot;
 
@@ -133,7 +133,7 @@ sub formatArticles {
     my $index = 0;
     for my $article (sort keys %$articles) {
         $index++;
-        $article = ":$article" if ($article =~ /^(?:\/|Category\s*:|File\s*:|Image\*:)/i);
+        $article = ":$article" if (requiresColon($article));
         $formatted .= ',&nbsp;' unless ($index == 1);
         $formatted .= "[[$article|$index]]";
     }

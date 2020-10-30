@@ -21,6 +21,7 @@ use citations qw(
     loadRedirects
     normalizeCitation
     removeControlCharacters
+    requiresColon
     retrieveFalsePositives
     setFormat
 );
@@ -235,7 +236,7 @@ sub formatDOICitation {
         my $index = 0;
         for my $article (sort keys %{$ref->{'articles'}}) {
             $index++;
-            $article = ":$article" if ($article =~ /^(?:\/|Category\s*:|File\s*:|Image\*:)/i);
+            $article = ":$article" if (requiresColon($article));
             $formatted .= ',&nbsp;' unless ($index == 1);
             $formatted .= "[[$article|$index]]";
         }
@@ -251,17 +252,22 @@ sub formatDOICitation {
     # determine title format
 
     my $format = 'nonexistent';
-    my $sth = $database->prepare('
-        SELECT pageType
-        FROM titles
-        WHERE title = ?
-    ');
-    $sth->bind_param(1, $citation);
-    $sth->execute();
-    while (my $ref = $sth->fetchrow_hashref()) {
-        $format = 'disambiguation' if ($ref->{'pageType'} eq 'DISAMBIG');
-        $format = 'existent' if ($ref->{'pageType'} eq 'NORMAL');
-        $format = 'redirect' if ($ref->{'pageType'} =~ /^REDIRECT/);
+    if ($citation =~ /[#<>\[\]\|{}_]/) {
+        $format = 'nowiki';
+    }
+    else {
+        my $sth = $database->prepare('
+            SELECT pageType
+            FROM titles
+            WHERE title = ?
+        ');
+        $sth->bind_param(1, $citation);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            $format = 'disambiguation' if ($ref->{'pageType'} eq 'DISAMBIG');
+            $format = 'existent' if ($ref->{'pageType'} eq 'NORMAL');
+            $format = 'redirect' if ($ref->{'pageType'} =~ /^REDIRECT/);
+        }
     }
     my $formatted = setFormat('display', $citation, $format);
 
