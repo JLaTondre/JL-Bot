@@ -645,7 +645,7 @@ sub parseDYKBlurb {
         for my $template (@$templates) {
             if ($template =~ /^\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones)/i) {
 
-                $template =~ /\|\s*dykentry\s*=\s*(.*?)\s*$/ims;
+                $template =~ /\|\s*dyk1?entry\s*=\s*(.*?)\s*$/ims;
                 $blurb = $1;
 
                 if ($blurb) {
@@ -761,7 +761,7 @@ sub parseDYKDates {
 
     # look for article history second
 
-    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*dykdate\s*=\s*(?:\[\[\s*)?([\w\d\s,\-]+)/ims) {
+    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*dyk1?date\s*=\s*(?:\[\[\s*)?([\w\d\s,\-]+)/ims) {
         my $date = $1;
         chomp $date;
 
