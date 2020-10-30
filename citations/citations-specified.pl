@@ -21,6 +21,7 @@ use citations qw(
     loadRedirects
     normalizeCitation
     removeControlCharacters
+    requiresColon
     retrieveFalsePositives
     setFormat
 );
@@ -235,7 +236,7 @@ sub formatDOICitation {
         my $index = 0;
         for my $article (sort keys %{$ref->{'articles'}}) {
             $index++;
-            $article = ":$article" if ($article =~ /^(?:\/|Category\s*:|File\s*:|Image\*:)/i);
+            $article = ":$article" if (requiresColon($article));
             $formatted .= ',&nbsp;' unless ($index == 1);
             $formatted .= "[[$article|$index]]";
         }

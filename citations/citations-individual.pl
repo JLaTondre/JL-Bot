@@ -11,7 +11,7 @@ use File::Basename;
 
 use lib dirname(__FILE__) . '/../modules';
 
-use citations qw( checkInterwiki initial loadInterwiki );
+use citations qw( checkInterwiki initial loadInterwiki requiresColon );
 use citationsDB;
 
 use utf8;
@@ -68,7 +68,7 @@ sub articleCount {
     my $index = 0;
     for my $article (sort keys %$articles) {
         $index++;
-        $article = ":$article" if ($article =~ /^(?:\/|Category\s*:|File\s*:|Image\*:)/i);
+        $article = ":$article" if (requiresColon($article));
         $formatted .= ',&nbsp;' unless ($index == 1);
         $formatted .= "[[$article|$index]]";
     }

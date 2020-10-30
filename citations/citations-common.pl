@@ -26,7 +26,6 @@ use citations qw(
     loadRedirects
     normalizeCitation
     retrieveFalsePositives
-    setFormat
 );
 use citationsDB;
 use mybot;
