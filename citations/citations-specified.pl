@@ -251,17 +251,22 @@ sub formatDOICitation {
     # determine title format
 
     my $format = 'nonexistent';
-    my $sth = $database->prepare('
-        SELECT pageType
-        FROM titles
-        WHERE title = ?
-    ');
-    $sth->bind_param(1, $citation);
-    $sth->execute();
-    while (my $ref = $sth->fetchrow_hashref()) {
-        $format = 'disambiguation' if ($ref->{'pageType'} eq 'DISAMBIG');
-        $format = 'existent' if ($ref->{'pageType'} eq 'NORMAL');
-        $format = 'redirect' if ($ref->{'pageType'} =~ /^REDIRECT/);
+    if ($citation =~ /[#<>\[\]\|{}_]/) {
+        $format = 'nowiki';
+    }
+    else {
+        my $sth = $database->prepare('
+            SELECT pageType
+            FROM titles
+            WHERE title = ?
+        ');
+        $sth->bind_param(1, $citation);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            $format = 'disambiguation' if ($ref->{'pageType'} eq 'DISAMBIG');
+            $format = 'existent' if ($ref->{'pageType'} eq 'NORMAL');
+            $format = 'redirect' if ($ref->{'pageType'} =~ /^REDIRECT/);
+        }
     }
     my $formatted = setFormat('display', $citation, $format);
 
