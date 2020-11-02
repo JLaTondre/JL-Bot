@@ -13,7 +13,7 @@ use URI::Escape qw( uri_escape_utf8 );
 
 use lib dirname(__FILE__) . '/../modules';
 
-use citations qw( queryDate setFormat );
+use citations qw( queryDate requiresColon setFormat );
 use citationsDB;
 use mybot;
 
@@ -481,6 +481,8 @@ sub generateQuestionable {
 
         $rank++;
 
+        $target = ":$target" if (requiresColon($target));
+
         my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|source=$source|note=$note|doi1=$doi|l-count=$lineCount|e-count=$entryCount|entries=\n$entries}}\n";
 
         push @results, $line;
@@ -545,6 +547,8 @@ sub generatePublisher {
         my $doi = $ref->{'doi'};
 
         $rank++;
+
+        $target = ":$target" if (requiresColon($target));
 
         my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|note=$note|doi1=$doi|l-count=$lineCount|e-count=$entryCount|entries=\n$entries}}\n";
 
