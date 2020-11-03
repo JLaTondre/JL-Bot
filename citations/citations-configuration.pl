@@ -185,7 +185,7 @@ sub updatePublisher {
             # drop prior DOI redirect configuration
             next;
         }
-        elsif ($line =~ /^\s*\}\}\s*$/) {
+        elsif ($line =~ /^\s*<\/div>\s*$/) {
             # end of section so add in doi redirects
             for my $target (keys %{$targets->{$section}}) {
                 # build doi-redirect template line
@@ -205,7 +205,7 @@ sub updatePublisher {
                     }
                 }
             }
-            $updated .= "}}\n";
+            $updated .= "</div>\n";
             $templates = {};
         }
         else {
@@ -246,7 +246,7 @@ sub updateQuestionable {
             # drop prior DOI redirect configuration
             next;
         }
-        elsif ($line =~ /^\s*\}\}\s*$/) {
+        elsif ($line =~ /^\s*<\/div>\s*$/) {
             # end of section so output sorted templates
             for my $target (sort { sortCitations($a, $b) } keys %$templates) {
                 for my $template (sort sortTemplates keys %{$templates->{$target}}) {
@@ -263,7 +263,7 @@ sub updateQuestionable {
                     $updated .= "}}\n";
                 }
             }
-            $updated .= "}}\n";
+            $updated .= "</div>\n";
             $templates = {};
 
         }
