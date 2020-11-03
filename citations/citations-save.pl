@@ -1310,7 +1310,7 @@ if ($saveFPCounts) {
             $templates->{$target}->{'exclude'}->{$new} = 1;
 
         }
-        elsif ($line =~ /^\s*\}\}\s*$/) {
+        elsif ($line =~ /^\s*<\/div>\s*$/) {
             # end of section so output sorted templates
             for my $target (sort { sortCitations($a, $b) } keys %$templates) {
                 for my $template (sort sortTemplates keys %{$templates->{$target}}) {
@@ -1319,7 +1319,7 @@ if ($saveFPCounts) {
                     }
                 }
             }
-            $output .= "}}\n";
+            $output .= "</div>\n";
             $templates = {};
 
         }
