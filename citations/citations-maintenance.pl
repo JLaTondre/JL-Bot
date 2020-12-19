@@ -174,7 +174,6 @@ sub findCapitalizationTargets {
     # Finds the targets for capitalization processing
 
     my $database = shift;
-    my $typos    = shift;
 
     print "  finding capitalization targets ...\r";
 
@@ -375,7 +374,7 @@ my $bot = mybot->new($BOTINFO);
 
 print "  retrieving transclusions of $CAPITALIZATIONS ...\n";
 my $members = $bot->getTransclusions($CAPITALIZATIONS);
-my $targets = findCapitalizationTargets($dbMaintain, $members);
+my $targets = findCapitalizationTargets($dbMaintain);
 
 my $current = 0;
 my $total = scalar keys %$targets;
@@ -389,9 +388,9 @@ for my $target (keys %$targets) {
 
     # process typos
 
-    for my $typo (keys %{$targets->{$target}}) {
+    for my $citation (keys %{$targets->{$target}}) {
 
-        my $normalization = normalizeCitation($typo);
+        my $normalization = normalizeCitation($citation);
 
         my $sth = $dbMaintain->prepare('
             SELECT citation
@@ -402,12 +401,12 @@ for my $target (keys %$targets) {
         $sth->bind_param(1, $normalization);
         $sth->execute();
         while (my $ref = $sth->fetchrow_hashref()) {
-            my $citation = $ref->{'citation'};
-            my $type = pageType($dbTitles, $citation);
-            next unless (lc $typo eq lc $citation);
+            my $candidate = $ref->{'citation'};
+            my $type = pageType($dbTitles, $candidate);
+            next unless (lc $citation eq lc $candidate);
             next unless (
                 ($type eq 'NONEXISTENT') or
-                (($type eq 'REDIRECT') and (exists $members->{$citation}))
+                (($type eq 'REDIRECT') and (exists $members->{$candidate}))
             );
             my $sth = $dbMaintain->prepare('
                 SELECT dFormat, target, cCount, aCount
@@ -415,13 +414,13 @@ for my $target (keys %$targets) {
                 WHERE type = "journal"
                 AND citation = ?
             ');
-            $sth->bind_param(1, $citation);
+            $sth->bind_param(1, $candidate);
             $sth->execute();
             while (my $ref = $sth->fetchrow_hashref()) {
-                $results->{$citation}->{'d-format'} = $ref->{'dFormat'};
-                $results->{$citation}->{'target'} = $ref->{'target'};
-                $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
-                $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+                $results->{$candidate}->{'d-format'} = $ref->{'dFormat'};
+                $results->{$candidate}->{'target'} = $ref->{'target'};
+                $results->{$candidate}->{'citation-count'} = $ref->{'cCount'};
+                $results->{$candidate}->{'article-count'} = $ref->{'aCount'};
             }
         }
 
