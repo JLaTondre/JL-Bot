@@ -174,7 +174,6 @@ sub findCapitalizationTargets {
     # Finds the targets for capitalization processing
 
     my $database = shift;
-    my $typos    = shift;
 
     print "  finding capitalization targets ...\r";
 
@@ -375,7 +374,7 @@ my $bot = mybot->new($BOTINFO);
 
 print "  retrieving transclusions of $CAPITALIZATIONS ...\n";
 my $members = $bot->getTransclusions($CAPITALIZATIONS);
-my $targets = findCapitalizationTargets($dbMaintain, $members);
+my $targets = findCapitalizationTargets($dbMaintain);
 
 my $current = 0;
 my $total = scalar keys %$targets;
@@ -389,39 +388,45 @@ for my $target (keys %$targets) {
 
     # process typos
 
-    for my $typo (keys %{$targets->{$target}}) {
+    for my $citation (keys %{$targets->{$target}}) {
 
-        my $normalization = normalizeCitation($typo);
+        my $alternate = $citation =~ s/ \(journal\)$//r;
 
-        my $sth = $dbMaintain->prepare('
-            SELECT citation
-            FROM normalizations
-            WHERE type = "journal"
-            AND normalization = ?
-        ');
-        $sth->bind_param(1, $normalization);
-        $sth->execute();
-        while (my $ref = $sth->fetchrow_hashref()) {
-            my $citation = $ref->{'citation'};
-            my $type = pageType($dbTitles, $citation);
-            next unless (lc $typo eq lc $citation);
-            next unless (
-                ($type eq 'NONEXISTENT') or
-                (($type eq 'REDIRECT') and (exists $members->{$citation}))
-            );
+        my $normalizations;
+        $normalizations->{$citation} = normalizeCitation($citation);
+        $normalizations->{$alternate} = normalizeCitation($alternate);
+
+        for my $normalized (keys %$normalizations) {
             my $sth = $dbMaintain->prepare('
-                SELECT dFormat, target, cCount, aCount
-                FROM individuals
+                SELECT citation
+                FROM normalizations
                 WHERE type = "journal"
-                AND citation = ?
+                AND normalization = ?
             ');
-            $sth->bind_param(1, $citation);
+            $sth->bind_param(1, $normalizations->{$normalized});
             $sth->execute();
             while (my $ref = $sth->fetchrow_hashref()) {
-                $results->{$citation}->{'d-format'} = $ref->{'dFormat'};
-                $results->{$citation}->{'target'} = $ref->{'target'};
-                $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
-                $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+                my $candidate = $ref->{'citation'};
+                my $type = pageType($dbTitles, $candidate);
+                next unless (lc $normalized eq lc $candidate);
+                next unless (
+                    ($type eq 'NONEXISTENT') or
+                    (($type eq 'REDIRECT') and (exists $members->{$candidate}))
+                );
+                my $sth = $dbMaintain->prepare('
+                    SELECT dFormat, target, cCount, aCount
+                    FROM individuals
+                    WHERE type = "journal"
+                    AND citation = ?
+                ');
+                $sth->bind_param(1, $candidate);
+                $sth->execute();
+                while (my $ref = $sth->fetchrow_hashref()) {
+                    $results->{$candidate}->{'d-format'} = $ref->{'dFormat'};
+                    $results->{$candidate}->{'target'} = $ref->{'target'};
+                    $results->{$candidate}->{'citation-count'} = $ref->{'cCount'};
+                    $results->{$candidate}->{'article-count'} = $ref->{'aCount'};
+                }
             }
         }
 
