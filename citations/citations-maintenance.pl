@@ -390,37 +390,43 @@ for my $target (keys %$targets) {
 
     for my $citation (keys %{$targets->{$target}}) {
 
-        my $normalization = normalizeCitation($citation);
+        my $alternate = $citation =~ s/ \(journal\)$//r;
 
-        my $sth = $dbMaintain->prepare('
-            SELECT citation
-            FROM normalizations
-            WHERE type = "journal"
-            AND normalization = ?
-        ');
-        $sth->bind_param(1, $normalization);
-        $sth->execute();
-        while (my $ref = $sth->fetchrow_hashref()) {
-            my $candidate = $ref->{'citation'};
-            my $type = pageType($dbTitles, $candidate);
-            next unless (lc $citation eq lc $candidate);
-            next unless (
-                ($type eq 'NONEXISTENT') or
-                (($type eq 'REDIRECT') and (exists $members->{$candidate}))
-            );
+        my $normalizations;
+        $normalizations->{$citation} = normalizeCitation($citation);
+        $normalizations->{$alternate} = normalizeCitation($alternate);
+
+        for my $normalized (keys %$normalizations) {
             my $sth = $dbMaintain->prepare('
-                SELECT dFormat, target, cCount, aCount
-                FROM individuals
+                SELECT citation
+                FROM normalizations
                 WHERE type = "journal"
-                AND citation = ?
+                AND normalization = ?
             ');
-            $sth->bind_param(1, $candidate);
+            $sth->bind_param(1, $normalizations->{$normalized});
             $sth->execute();
             while (my $ref = $sth->fetchrow_hashref()) {
-                $results->{$candidate}->{'d-format'} = $ref->{'dFormat'};
-                $results->{$candidate}->{'target'} = $ref->{'target'};
-                $results->{$candidate}->{'citation-count'} = $ref->{'cCount'};
-                $results->{$candidate}->{'article-count'} = $ref->{'aCount'};
+                my $candidate = $ref->{'citation'};
+                my $type = pageType($dbTitles, $candidate);
+                next unless (lc $normalized eq lc $candidate);
+                next unless (
+                    ($type eq 'NONEXISTENT') or
+                    (($type eq 'REDIRECT') and (exists $members->{$candidate}))
+                );
+                my $sth = $dbMaintain->prepare('
+                    SELECT dFormat, target, cCount, aCount
+                    FROM individuals
+                    WHERE type = "journal"
+                    AND citation = ?
+                ');
+                $sth->bind_param(1, $candidate);
+                $sth->execute();
+                while (my $ref = $sth->fetchrow_hashref()) {
+                    $results->{$candidate}->{'d-format'} = $ref->{'dFormat'};
+                    $results->{$candidate}->{'target'} = $ref->{'target'};
+                    $results->{$candidate}->{'citation-count'} = $ref->{'cCount'};
+                    $results->{$candidate}->{'article-count'} = $ref->{'aCount'};
+                }
             }
         }
 
