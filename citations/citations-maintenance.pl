@@ -133,7 +133,7 @@ sub retrieveMaintenance {
 
         $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
 
-        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(?:1\s*=\s*)?(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
             my $target     = $1;
             my $additional = $2;
 
