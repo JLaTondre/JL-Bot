@@ -841,7 +841,7 @@ sub retrieveFalsePositives {
     my $falsePositives;
 
     for my $line (split "\n", $text) {
-        if ($line =~ /^\s*\{\{\s*[JM]CW-exclude\s*\|\s*(.*?)\s*\|\s*(?:2\s*=\s*)?(.*?)\s*(?:\|\s*c\s*=\s*\d+\s*)?\}\}\s*$/i) {
+        if ($line =~ /^\s*\{\{\s*[JM]CW-exclude\s*\|\s*(?:1\s*=\s*)?(.*?)\s*\|\s*(?:2\s*=\s*)?(.*?)\s*(?:\|\s*c\s*=\s*\d+\s*)?\}\}\s*$/i) {
             my $target = $1;
             my $ignore = $2;
             $falsePositives->{$target}->{$ignore} = 1;

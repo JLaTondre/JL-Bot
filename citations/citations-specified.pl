@@ -657,7 +657,7 @@ sub retrieveSpecified {
 
             $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
 
-            if ($line =~ /^\s*\{\{\s*JCW-(selected|pattern|doi-redirects)\s*\|\s*(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+            if ($line =~ /^\s*\{\{\s*JCW-(selected|pattern|doi-redirects)\s*\|\s*(?:1\s*=\s*)?(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
                 my $template   = $1;
                 my $target     = $2;
                 my $additional = $3;
