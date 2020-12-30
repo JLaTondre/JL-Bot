@@ -114,61 +114,6 @@ sub citationCount {
     return $count;
 }
 
-sub retrieveMaintenance {
-
-    # Retrieve maintenance settings from wiki page.
-
-    my $info = shift;
-    my $page = shift;
-
-    print "  retrieving maintenance configuration ...\n";
-
-    my $bot = mybot->new($info);
-
-    my ($text, $timestamp, $revision) = $bot->getText($page);
-
-    my $maintenance;
-
-    for my $line (split "\n", $text) {
-
-        $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
-
-        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(?:1\s*=\s*)?(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
-            my $target     = $1;
-            my $additional = $2;
-
-            # see if exclusion type specified & capture
-            my $exclusion = 'none';
-            if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
-                $exclusion = $1;
-                if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
-                    warn "$target pattern has unknown exclude type $exclusion in $line\n";
-                    next;
-                }
-                $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
-            }
-
-            # pull out patterns
-
-            my @terms = split(/\|/, $additional);
-            for my $term (@terms) {
-                $term =~ s/^\d+\s*=\s*//;
-                if ($term =~ /\Q.*\E/) {
-                    $maintenance->{$target}->{'include'}->{$term} = $exclusion;
-                }
-                elsif ($term =~ /!/) {
-                    $maintenance->{$target}->{'exclude'}->{$term} = 1;
-                }
-                else {
-                    warn "Unknown pattern: $target --> [$term]\n";
-                }
-            }
-        }
-    }
-
-    return $maintenance, $revision;
-}
-
 sub findCapitalizationTargets {
 
     # Finds the targets for capitalization processing
@@ -228,49 +173,6 @@ sub findSpellingTargets {
     return $results;
 }
 
-sub formatTypoEntries {
-
-    # Format the entries field for typo output
-
-    my $citations = shift;
-
-    my $output;
-
-    for my $citation (sort keys %$citations) {
-        my $format = $citations->{$citation}->{'d-format'};
-        my $count = $citations->{$citation}->{'citation-count'};
-        my $articles = $citations->{$citation}->{'article-count'};
-        my $formatted = setFormat('display', $citation, $format);
-        $output .= "* $formatted ($count in $articles)\n";
-    }
-
-    return $output;
-}
-
-sub pageType {
-
-    # Returns the page type
-
-    my $database = shift;
-    my $title = shift;
-
-    my $sth = $database->prepare(q{
-        SELECT pageType
-        FROM titles
-        WHERE title = ?
-    });
-    $sth->bind_param(1, $title);
-    $sth->execute();
-
-    while (my $ref = $sth->fetchrow_hashref()) {
-        my $type = $ref->{'pageType'};
-        $type =~ s/-UNNECESSARY//;
-        return $type;
-    }
-
-    return 'NONEXISTENT';
-}
-
 sub formatPatternEntries {
 
     # Format the entries field for pattern output
@@ -321,6 +223,104 @@ sub formatPatternEntries {
     }
 
     return $output;
+}
+
+sub formatTypoEntries {
+
+    # Format the entries field for typo output
+
+    my $citations = shift;
+
+    my $output;
+
+    for my $citation (sort keys %$citations) {
+        my $format = $citations->{$citation}->{'d-format'};
+        my $count = $citations->{$citation}->{'citation-count'};
+        my $articles = $citations->{$citation}->{'article-count'};
+        my $formatted = setFormat('display', $citation, $format);
+        $output .= "* $formatted ($count in $articles)\n";
+    }
+
+    return $output;
+}
+
+sub pageType {
+
+    # Returns the page type
+
+    my $database = shift;
+    my $title = shift;
+
+    my $sth = $database->prepare(q{
+        SELECT pageType
+        FROM titles
+        WHERE title = ?
+    });
+    $sth->bind_param(1, $title);
+    $sth->execute();
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $type = $ref->{'pageType'};
+        $type =~ s/-UNNECESSARY//;
+        return $type;
+    }
+
+    return 'NONEXISTENT';
+}
+
+sub retrieveMaintenance {
+
+    # Retrieve maintenance settings from wiki page.
+
+    my $info = shift;
+    my $page = shift;
+
+    print "  retrieving maintenance configuration ...\n";
+
+    my $bot = mybot->new($info);
+
+    my ($text, $timestamp, $revision) = $bot->getText($page);
+
+    my $maintenance;
+
+    for my $line (split "\n", $text) {
+
+        $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
+
+        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(?:1\s*=\s*)?(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+            my $target     = $1;
+            my $additional = $2;
+
+            # see if exclusion type specified & capture
+            my $exclusion = 'none';
+            if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
+                $exclusion = $1;
+                if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
+                    warn "$target pattern has unknown exclude type $exclusion in $line\n";
+                    next;
+                }
+                $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
+            }
+
+            # pull out patterns
+
+            my @terms = split(/\|/, $additional);
+            for my $term (@terms) {
+                $term =~ s/^\d+\s*=\s*//;
+                if ($term =~ /\Q.*\E/) {
+                    $maintenance->{$target}->{'include'}->{$term} = $exclusion;
+                }
+                elsif ($term =~ /!/) {
+                    $maintenance->{$target}->{'exclude'}->{$term} = 1;
+                }
+                else {
+                    warn "Unknown pattern: $target --> [$term]\n";
+                }
+            }
+        }
+    }
+
+    return $maintenance, $revision;
 }
 
 
