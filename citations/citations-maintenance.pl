@@ -368,7 +368,7 @@ my $sth = $dbMaintain->prepare('INSERT INTO revisions VALUES (?, ?)');
 $sth->execute('maintenance', $mRevision);
 $dbMaintain->commit;
 
-# process capitalizations
+# process capitalization differences
 
 my $bot = mybot->new($BOTINFO);
 
@@ -385,8 +385,6 @@ for my $target (keys %$targets) {
     print "  processing $current of $total capitalization targets ...\r";
 
     my $results;
-
-    # process typos
 
     for my $citation (keys %{$targets->{$target}}) {
 
@@ -450,6 +448,46 @@ for my $target (keys %$targets) {
 
 }
 print "                                                 \r";
+
+# process all capital non-existent targets
+
+print "  processing non-existent targets ...\r";
+
+my $results;
+
+$sth = $dbMaintain->prepare('
+    SELECT citation, cCount, aCount
+    FROM individuals
+    WHERE type = "journal"
+    AND dFormat = "nonexistent"
+');
+$sth->execute();
+while (my $ref = $sth->fetchrow_hashref()) {
+    my $citation = $ref->{'citation'};
+    my $cCount  = $ref->{'cCount'};
+    my $aCount  = $ref->{'aCount'};
+    next unless (($citation =~ /\p{IsUpper}/) and ($citation !~ /\p{IsLower}/));
+    $results->{$citation}->{'d-format'} = 'nonexistent';
+    $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
+    $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+}
+print "                                                 \r";
+
+if ($results) {
+
+    # generate final data (que up transactions & commit at end)
+
+    my $entries = formatTypoEntries($results);
+    my $articles = articleCount($dbMaintain, 'journal', $results);
+    my $citations = citationCount($results);
+
+    my $sth = $dbMaintain->prepare("
+        INSERT INTO capitalizations (target, entries, articles, citations)
+        VALUES (?, ?, ?, ?)
+    ");
+    $sth->execute('nonexistent', $entries, $articles, $citations);
+
+}
 
 # process spellings
 
