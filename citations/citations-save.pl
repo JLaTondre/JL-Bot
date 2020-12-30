@@ -896,7 +896,7 @@ sub generateCapitalization {
         SELECT target, entries, articles, citations
         FROM capitalizations
         WHERE citations > 0
-        ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
+        ORDER BY precedence ASC, citations DESC, CAST(articles AS INTEGER) DESC, target ASC
     ");
     $sth->execute();
 

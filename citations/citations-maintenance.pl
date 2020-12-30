@@ -47,7 +47,7 @@ my $MAINTENANCE = 'User:JL-Bot/Maintenance.cfg';
 my $PATTERNMAX = 1000;
 
 my @TABLES = (
-    'CREATE TABLE capitalizations(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE capitalizations(precedence INTEGER, target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE spellings(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE patterns(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
@@ -439,8 +439,8 @@ for my $target (keys %$targets) {
         my $citations = citationCount($results);
 
         my $sth = $dbMaintain->prepare("
-            INSERT INTO capitalizations (target, entries, articles, citations)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO capitalizations (precedence, target, entries, articles, citations)
+            VALUES (1, ?, ?, ?, ?)
         ");
         $sth->execute($target, $entries, $articles, $citations);
 
@@ -482,8 +482,8 @@ if ($results) {
     my $citations = citationCount($results);
 
     my $sth = $dbMaintain->prepare("
-        INSERT INTO capitalizations (target, entries, articles, citations)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO capitalizations (precedence, target, entries, articles, citations)
+        VALUES (2, ?, ?, ?, ?)
     ");
     $sth->execute('nonexistent', $entries, $articles, $citations);
 
