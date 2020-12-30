@@ -114,6 +114,27 @@ sub citationCount {
     return $count;
 }
 
+sub determineCapitalizationType {
+
+    # Determine if an all caps citation and which category
+
+    my $citation = shift;
+
+    if (($citation =~ /\p{IsUpper}/) and ($citation !~ /\p{IsLower}/)) {
+        if ($citation =~ /^(?:\p{IsUpper}|:|,|&|;|-|–|—|’|‘|'|"|\.|\s)+$/) {
+            if (length($citation) > 5) {
+                return 'ALL CAPS (Long)';
+            }
+            else {
+                return 'ALL CAPS (Short)';
+            }
+        }
+        return 'ALL CAPS (Other)';
+    }
+
+    return 0;
+}
+
 sub findCapitalizationTargets {
 
     # Finds the targets for capitalization processing
@@ -466,26 +487,28 @@ while (my $ref = $sth->fetchrow_hashref()) {
     my $citation = $ref->{'citation'};
     my $cCount  = $ref->{'cCount'};
     my $aCount  = $ref->{'aCount'};
-    next unless (($citation =~ /\p{IsUpper}/) and ($citation !~ /\p{IsLower}/));
-    $results->{$citation}->{'d-format'} = 'nonexistent';
-    $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
-    $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+    my $type = determineCapitalizationType($citation);
+    if ($type) {
+        $results->{$type}->{$citation}->{'d-format'} = 'nonexistent';
+        $results->{$type}->{$citation}->{'citation-count'} = $ref->{'cCount'};
+        $results->{$type}->{$citation}->{'article-count'} = $ref->{'aCount'};
+    }
 }
 print "                                                 \r";
 
-if ($results) {
+for my $type (keys %$results) {
 
     # generate final data (que up transactions & commit at end)
 
-    my $entries = formatTypoEntries($results);
-    my $articles = articleCount($dbMaintain, 'journal', $results);
-    my $citations = citationCount($results);
+    my $entries = formatTypoEntries($results->{$type});
+    my $articles = articleCount($dbMaintain, 'journal', $results->{$type});
+    my $citations = citationCount($results->{$type});
 
     my $sth = $dbMaintain->prepare("
         INSERT INTO capitalizations (precedence, target, entries, articles, citations)
         VALUES (2, ?, ?, ?, ?)
     ");
-    $sth->execute('nonexistent', $entries, $articles, $citations);
+    $sth->execute($type, $entries, $articles, $citations);
 
 }
 

@@ -912,7 +912,9 @@ sub generateCapitalization {
 
         $rank++;
 
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
+        $target = "[[$target]]" unless ($target =~ /^ALL CAPS \(.+\)$/);
+
+        my $line = "{{$row|rank=$rank|target=$target|citations=$citations|articles=$articles|entries=\n$entries}}\n";
 
         push @results, $line;
     }
