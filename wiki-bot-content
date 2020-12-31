@@ -214,6 +214,7 @@ sub getParameters {
     my $dykblurb     = 0;
     my $italicize    = 0;
     my $gallery      = 0;
+    my $noCaptions   = 0;
 
     my %duplicate    = ();            # use to ignore duplicate content types
 
@@ -386,6 +387,12 @@ sub getParameters {
             $gallery = $1;
         }
 
+        # look for 'no-captions' parameter
+
+        if (/^\s*no-captions\s*$/i) {
+            $noCaptions = 1;
+        }
+
     }
 
     # validate parameters
@@ -482,6 +489,7 @@ sub getParameters {
     print "  dyk-blurb     = $dykblurb\n" if ($dykblurb);
     print "  italics       = $italicize\n" if ($italicize);
     print "  gallery       = $gallery\n" if ($gallery);
+    print "  no captions   = $noCaptions\n" if ($noCaptions);
     print "\n";
 
     # store parameters
@@ -520,6 +528,7 @@ sub getParameters {
     $parameters->{dykblurb}     = $dykblurb;
     $parameters->{italicize}    = $italicize;
     $parameters->{gallery}      = $gallery;
+    $parameters->{noCaptions}   = $noCaptions;
 
     return $parameters;
 }
@@ -1114,6 +1123,7 @@ for my $update (sort keys %$toUpdate) {
     my $dykblurb     = $parameters->{dykblurb};
     my $italicize    = $parameters->{italicize};
     my $gallery      = $parameters->{gallery};
+    my $noCaptions   = $parameters->{noCaptions};
 
     # retrieve pages in the content types requested
 
@@ -1454,7 +1464,11 @@ for my $update (sort keys %$toUpdate) {
 
                 for my $sort (sort keys %{$results->{$type}}) {
                     my $page = $results->{$type}->{$sort};
-                    $output .= "$page|$page";
+                    $output .= "$page";
+                    unless ($noCaptions) {
+                        my $caption = $page =~ s/^File:(.+?)(?:\.(?:tiff|tif|png|gif|jpg|jpeg|webp|xcf|pdf|mid|ogg|ogv|svg|djvu|oga|flac|opus|wav|webm|mp3|midi|mpg|mpeg))?$/$1/r;
+                        $output .= "|$caption";
+                    }
                     if (($dates) and (exists $dateTypes{$type})) {
                         $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
                         $sort = $pageInfo->{$page}->{date}->{$type};
