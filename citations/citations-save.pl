@@ -896,7 +896,7 @@ sub generateCapitalization {
         SELECT target, entries, articles, citations
         FROM capitalizations
         WHERE citations > 0
-        ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
+        ORDER BY precedence ASC, citations DESC, CAST(articles AS INTEGER) DESC, target ASC
     ");
     $sth->execute();
 
@@ -912,7 +912,9 @@ sub generateCapitalization {
 
         $rank++;
 
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
+        $target = "[[$target]]" unless ($target =~ /^ALL CAPS \(.+\)$/);
+
+        my $line = "{{$row|rank=$rank|target=$target|citations=$citations|articles=$articles|entries=\n$entries}}\n";
 
         push @results, $line;
     }

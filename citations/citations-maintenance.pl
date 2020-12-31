@@ -47,7 +47,7 @@ my $MAINTENANCE = 'User:JL-Bot/Maintenance.cfg';
 my $PATTERNMAX = 1000;
 
 my @TABLES = (
-    'CREATE TABLE capitalizations(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE capitalizations(precedence INTEGER, target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE spellings(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE patterns(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
@@ -114,59 +114,25 @@ sub citationCount {
     return $count;
 }
 
-sub retrieveMaintenance {
+sub determineCapitalizationType {
 
-    # Retrieve maintenance settings from wiki page.
+    # Determine if an all caps citation and which category
 
-    my $info = shift;
-    my $page = shift;
+    my $citation = shift;
 
-    print "  retrieving maintenance configuration ...\n";
-
-    my $bot = mybot->new($info);
-
-    my ($text, $timestamp, $revision) = $bot->getText($page);
-
-    my $maintenance;
-
-    for my $line (split "\n", $text) {
-
-        $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
-
-        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(?:1\s*=\s*)?(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
-            my $target     = $1;
-            my $additional = $2;
-
-            # see if exclusion type specified & capture
-            my $exclusion = 'none';
-            if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
-                $exclusion = $1;
-                if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
-                    warn "$target pattern has unknown exclude type $exclusion in $line\n";
-                    next;
-                }
-                $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
+    if (($citation =~ /\p{IsUpper}/) and ($citation !~ /\p{IsLower}/)) {
+        if ($citation =~ /^(?:\p{IsUpper}|:|,|&|;|-|–|—|’|‘|'|"|\.|\s)+$/) {
+            if (length($citation) > 5) {
+                return 'ALL CAPS (Long)';
             }
-
-            # pull out patterns
-
-            my @terms = split(/\|/, $additional);
-            for my $term (@terms) {
-                $term =~ s/^\d+\s*=\s*//;
-                if ($term =~ /\Q.*\E/) {
-                    $maintenance->{$target}->{'include'}->{$term} = $exclusion;
-                }
-                elsif ($term =~ /!/) {
-                    $maintenance->{$target}->{'exclude'}->{$term} = 1;
-                }
-                else {
-                    warn "Unknown pattern: $target --> [$term]\n";
-                }
+            else {
+                return 'ALL CAPS (Short)';
             }
         }
+        return 'ALL CAPS (Other)';
     }
 
-    return $maintenance, $revision;
+    return 0;
 }
 
 sub findCapitalizationTargets {
@@ -228,49 +194,6 @@ sub findSpellingTargets {
     return $results;
 }
 
-sub formatTypoEntries {
-
-    # Format the entries field for typo output
-
-    my $citations = shift;
-
-    my $output;
-
-    for my $citation (sort keys %$citations) {
-        my $format = $citations->{$citation}->{'d-format'};
-        my $count = $citations->{$citation}->{'citation-count'};
-        my $articles = $citations->{$citation}->{'article-count'};
-        my $formatted = setFormat('display', $citation, $format);
-        $output .= "* $formatted ($count in $articles)\n";
-    }
-
-    return $output;
-}
-
-sub pageType {
-
-    # Returns the page type
-
-    my $database = shift;
-    my $title = shift;
-
-    my $sth = $database->prepare(q{
-        SELECT pageType
-        FROM titles
-        WHERE title = ?
-    });
-    $sth->bind_param(1, $title);
-    $sth->execute();
-
-    while (my $ref = $sth->fetchrow_hashref()) {
-        my $type = $ref->{'pageType'};
-        $type =~ s/-UNNECESSARY//;
-        return $type;
-    }
-
-    return 'NONEXISTENT';
-}
-
 sub formatPatternEntries {
 
     # Format the entries field for pattern output
@@ -323,6 +246,104 @@ sub formatPatternEntries {
     return $output;
 }
 
+sub formatTypoEntries {
+
+    # Format the entries field for typo output
+
+    my $citations = shift;
+
+    my $output;
+
+    for my $citation (sort keys %$citations) {
+        my $format = $citations->{$citation}->{'d-format'};
+        my $count = $citations->{$citation}->{'citation-count'};
+        my $articles = $citations->{$citation}->{'article-count'};
+        my $formatted = setFormat('display', $citation, $format);
+        $output .= "* $formatted ($count in $articles)\n";
+    }
+
+    return $output;
+}
+
+sub pageType {
+
+    # Returns the page type
+
+    my $database = shift;
+    my $title = shift;
+
+    my $sth = $database->prepare(q{
+        SELECT pageType
+        FROM titles
+        WHERE title = ?
+    });
+    $sth->bind_param(1, $title);
+    $sth->execute();
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $type = $ref->{'pageType'};
+        $type =~ s/-UNNECESSARY//;
+        return $type;
+    }
+
+    return 'NONEXISTENT';
+}
+
+sub retrieveMaintenance {
+
+    # Retrieve maintenance settings from wiki page.
+
+    my $info = shift;
+    my $page = shift;
+
+    print "  retrieving maintenance configuration ...\n";
+
+    my $bot = mybot->new($info);
+
+    my ($text, $timestamp, $revision) = $bot->getText($page);
+
+    my $maintenance;
+
+    for my $line (split "\n", $text) {
+
+        $line =~ s/\[\[([^\|\]]+)\|([^\]]+)\]\]/##--##$1##--##$2##-##/g;        # escape [[this|that]]
+
+        if ($line =~ /^\s*\{\{\s*JCW-pattern\s*\|\s*(?:1\s*=\s*)?(.*?)\s*(?:\|(.*?))?\s*\}\}\s*$/i) {
+            my $target     = $1;
+            my $additional = $2;
+
+            # see if exclusion type specified & capture
+            my $exclusion = 'none';
+            if ($additional =~ /\|\s*exclude\s*=\s*(.+)\s*$/) {
+                $exclusion = $1;
+                if (($exclusion ne 'bluelinks') and ($exclusion ne 'redlinks')) {
+                    warn "$target pattern has unknown exclude type $exclusion in $line\n";
+                    next;
+                }
+                $additional =~ s/\|\s*exclude\s*=\s*.+\s*$//;
+            }
+
+            # pull out patterns
+
+            my @terms = split(/\|/, $additional);
+            for my $term (@terms) {
+                $term =~ s/^\d+\s*=\s*//;
+                if ($term =~ /\Q.*\E/) {
+                    $maintenance->{$target}->{'include'}->{$term} = $exclusion;
+                }
+                elsif ($term =~ /!/) {
+                    $maintenance->{$target}->{'exclude'}->{$term} = 1;
+                }
+                else {
+                    warn "Unknown pattern: $target --> [$term]\n";
+                }
+            }
+        }
+    }
+
+    return $maintenance, $revision;
+}
+
 
 #
 # Main
@@ -368,7 +389,7 @@ my $sth = $dbMaintain->prepare('INSERT INTO revisions VALUES (?, ?)');
 $sth->execute('maintenance', $mRevision);
 $dbMaintain->commit;
 
-# process capitalizations
+# process capitalization differences
 
 my $bot = mybot->new($BOTINFO);
 
@@ -385,8 +406,6 @@ for my $target (keys %$targets) {
     print "  processing $current of $total capitalization targets ...\r";
 
     my $results;
-
-    # process typos
 
     for my $citation (keys %{$targets->{$target}}) {
 
@@ -441,8 +460,8 @@ for my $target (keys %$targets) {
         my $citations = citationCount($results);
 
         my $sth = $dbMaintain->prepare("
-            INSERT INTO capitalizations (target, entries, articles, citations)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO capitalizations (precedence, target, entries, articles, citations)
+            VALUES (1, ?, ?, ?, ?)
         ");
         $sth->execute($target, $entries, $articles, $citations);
 
@@ -450,6 +469,48 @@ for my $target (keys %$targets) {
 
 }
 print "                                                 \r";
+
+# process all capital non-existent targets
+
+print "  processing non-existent targets ...\r";
+
+my $results;
+
+$sth = $dbMaintain->prepare('
+    SELECT citation, cCount, aCount
+    FROM individuals
+    WHERE type = "journal"
+    AND dFormat = "nonexistent"
+');
+$sth->execute();
+while (my $ref = $sth->fetchrow_hashref()) {
+    my $citation = $ref->{'citation'};
+    my $cCount  = $ref->{'cCount'};
+    my $aCount  = $ref->{'aCount'};
+    my $type = determineCapitalizationType($citation);
+    if ($type) {
+        $results->{$type}->{$citation}->{'d-format'} = 'nonexistent';
+        $results->{$type}->{$citation}->{'citation-count'} = $ref->{'cCount'};
+        $results->{$type}->{$citation}->{'article-count'} = $ref->{'aCount'};
+    }
+}
+print "                                                 \r";
+
+for my $type (keys %$results) {
+
+    # generate final data (que up transactions & commit at end)
+
+    my $entries = formatTypoEntries($results->{$type});
+    my $articles = articleCount($dbMaintain, 'journal', $results->{$type});
+    my $citations = citationCount($results->{$type});
+
+    my $sth = $dbMaintain->prepare("
+        INSERT INTO capitalizations (precedence, target, entries, articles, citations)
+        VALUES (2, ?, ?, ?, ?)
+    ");
+    $sth->execute($type, $entries, $articles, $citations);
+
+}
 
 # process spellings
 
