@@ -158,6 +158,77 @@ my $vital;            # hold vital template parsing errors
 # Subroutines
 #
 
+sub getContent {
+
+    # This subroutine retrieves applicable content from a source.   It is passed
+    # the bot and the source.  It returns a hash ref with the content.
+
+    my $bot    = shift;
+    my $source = shift;
+
+    my $members;    # hash ref to hold query results
+
+    if ($source =~ /^Category:/) {
+        print "  Retrieving members of $source ... ";
+        $members = $bot->getCategoryMembers($source, '1|5|6|7|101');
+        print scalar(keys %$members) . "\n";
+    }
+    elsif ($source =~ /^Template:/) {
+        print "  Retrieving transclusions of $source ... ";
+        $members = $bot->getTransclusions($source, '1|5|6|7|101');
+        print scalar(keys %$members) . "\n";
+    }
+    else {
+        die "ERROR: Unknown source type! --> $source\n\n";
+    }
+
+    return $members;
+}
+
+sub getPageInfo {
+
+    # This function parses talk page templates to find relevant information.
+    # It is designed so that a talk page only has to be retrieved once.
+
+    my $bot  = shift;
+    my $page = shift;
+
+    my $talk = "Talk:$page";
+    $talk =~ s/^Talk:File:/File talk:/;
+    $talk =~ s/^Talk:Portal:/Portal talk:/;
+    $talk =~ s/^Talk:Wikipedia:/Wikipedia talk:/;
+
+    my ($text, ) = $bot->getText($talk);
+
+    my $info;   # hash ref to contain talk info
+
+    # parse vital class
+
+    $info->{vital} = parseVital($text, $talk);
+
+    # parse date types
+
+    $info->{date}->{'content-did-you-know-articles'} = parseDYKDates($text, $talk);
+    $info->{date}->{'content-mainpage-in-the-news'} = parseMainPageNews($text, $talk);
+    $info->{date}->{'content-mainpage-featured'} = parseMainPageFeatured($text, $talk);
+    $info->{date}->{'content-mainpage-lists'} = $info->{date}->{'content-mainpage-featured'};
+
+    # dyk blurb
+
+    $info->{blurb} = parseDYKBlurb($text, $page, $talk);
+
+    # picture date (separate as template is on picture page, not talk)
+
+    $info->{date}->{'content-picture-of-the-day'} = 'NONE';
+
+    if ($page =~ /^File:/) {
+        ($text, ) = $bot->getText($page);
+        $info->{date}->{'content-picture-of-the-day'} = parsePictureDay($text, $talk);
+    }
+
+    return $info;
+}
+
 sub getParameters {
 
     # This subroutine extracts the template parameters from a page transcluding
@@ -533,33 +604,6 @@ sub getParameters {
     return $parameters;
 }
 
-sub getContent {
-
-    # This subroutine retrieves applicable content from a source.   It is passed
-    # the bot and the source.  It returns a hash ref with the content.
-
-    my $bot    = shift;
-    my $source = shift;
-
-    my $members;    # hash ref to hold query results
-
-    if ($source =~ /^Category:/) {
-        print "  Retrieving members of $source ... ";
-        $members = $bot->getCategoryMembers($source, '1|5|6|7|101');
-        print scalar(keys %$members) . "\n";
-    }
-    elsif ($source =~ /^Template:/) {
-        print "  Retrieving transclusions of $source ... ";
-        $members = $bot->getTransclusions($source, '1|5|6|7|101');
-        print scalar(keys %$members) . "\n";
-    }
-    else {
-        die "ERROR: Unknown source type! --> $source\n\n";
-    }
-
-    return $members;
-}
-
 sub findTemplates {
 
     # This subroutine finds a template in a text string.  It is passed the text
@@ -593,6 +637,18 @@ sub findTemplates {
     }
 
     return \@templates;
+}
+
+sub italicizePage {
+
+    # Apply italic formatting to page title
+
+    my $page = shift;
+
+    my $title = "''$page''";
+    $title =~ s/( \(.+\))''/'' $1/;     # change ''one (two)'' to ''one'' (two)
+
+    return "[[:$page|$title]]"
 }
 
 sub parseDYKBlurb {
@@ -710,30 +766,6 @@ sub parseDYKBlurb {
     return $blurb
 }
 
-sub parseVital {
-
-    # This function parses the talk page for the vital class
-
-    my $text = shift;
-    my $talk = shift;
-
-    my $result = 'NONE';
-
-    if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va\s*\|)/is) {
-        if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va)\s*\|.*?class\s*=\s*(.+?)[\|\}]/ims) {
-            my $class = $1;
-            $result = $class;
-        }
-        else {
-            $result = 'MISSING';
-            $vital->{$talk} = 1;
-        }
-
-    }
-
-    return $result;
-}
-
 sub parseDYKDates {
 
     # This function parses the talk page for the DYK date
@@ -773,6 +805,31 @@ sub parseDYKDates {
     if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*dyk1?date\s*=\s*(?:\[\[\s*)?([\w\d\s,\-]+)/ims) {
         my $date = $1;
         chomp $date;
+
+        if ($date) {
+            my $ezdate = Date::EzDate->new($date);
+            $result = $ezdate->{'%Y-%m-%d'};
+        }
+        else {
+            $result = '0000-00-00';
+            $articlehistory->{$talk} = 1;
+        }
+    }
+
+    return $result;
+}
+
+sub parseMainPageFeatured {
+
+    # This function parses the talk page for the main page featured date
+
+    my $text = shift;
+    my $talk = shift;
+
+    my $result = 'NONE';
+
+    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*maindate\s*=\s*(?:\[\[\s*)?([\w\d\s,-]+)/ims) {
+        my $date = $1;
 
         if ($date) {
             my $ezdate = Date::EzDate->new($date);
@@ -840,31 +897,6 @@ sub parseMainPageNews {
     return $result;
 }
 
-sub parseMainPageFeatured {
-
-    # This function parses the talk page for the main page featured date
-
-    my $text = shift;
-    my $talk = shift;
-
-    my $result = 'NONE';
-
-    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*maindate\s*=\s*(?:\[\[\s*)?([\w\d\s,-]+)/ims) {
-        my $date = $1;
-
-        if ($date) {
-            my $ezdate = Date::EzDate->new($date);
-            $result = $ezdate->{'%Y-%m-%d'};
-        }
-        else {
-            $result = '0000-00-00';
-            $articlehistory->{$talk} = 1;
-        }
-    }
-
-    return $result;
-}
-
 sub parsePictureDay {
 
     # This function parses the talk page for the picture of the day date
@@ -893,48 +925,28 @@ sub parsePictureDay {
     return $result;
 }
 
-sub getPageInfo {
+sub parseVital {
 
-    # This function parses talk page templates to find relevant information.
-    # It is designed so that a talk page only has to be retrieved once.
+    # This function parses the talk page for the vital class
 
-    my $bot  = shift;
-    my $page = shift;
+    my $text = shift;
+    my $talk = shift;
 
-    my $talk = "Talk:$page";
-    $talk =~ s/^Talk:File:/File talk:/;
-    $talk =~ s/^Talk:Portal:/Portal talk:/;
-    $talk =~ s/^Talk:Wikipedia:/Wikipedia talk:/;
+    my $result = 'NONE';
 
-    my ($text, ) = $bot->getText($talk);
+    if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va\s*\|)/is) {
+        if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va)\s*\|.*?class\s*=\s*(.+?)[\|\}]/ims) {
+            my $class = $1;
+            $result = $class;
+        }
+        else {
+            $result = 'MISSING';
+            $vital->{$talk} = 1;
+        }
 
-    my $info;   # hash ref to contain talk info
-
-    # parse vital class
-
-    $info->{vital} = parseVital($text, $talk);
-
-    # parse date types
-
-    $info->{date}->{'content-did-you-know-articles'} = parseDYKDates($text, $talk);
-    $info->{date}->{'content-mainpage-in-the-news'} = parseMainPageNews($text, $talk);
-    $info->{date}->{'content-mainpage-featured'} = parseMainPageFeatured($text, $talk);
-    $info->{date}->{'content-mainpage-lists'} = $info->{date}->{'content-mainpage-featured'};
-
-    # dyk blurb
-
-    $info->{blurb} = parseDYKBlurb($text, $page, $talk);
-
-    # picture date (separate as template is on picture page, not talk)
-
-    $info->{date}->{'content-picture-of-the-day'} = 'NONE';
-
-    if ($page =~ /^File:/) {
-        ($text, ) = $bot->getText($page);
-        $info->{date}->{'content-picture-of-the-day'} = parsePictureDay($text, $talk);
     }
 
-    return $info;
+    return $result;
 }
 
 sub saveResults {
@@ -971,18 +983,6 @@ sub saveResults {
     }
 
     return;
-}
-
-sub italicizePage {
-
-    # Apply italic formatting to page title
-
-    my $page = shift;
-
-    my $title = "''$page''";
-    $title =~ s/( \(.+\))''/'' $1/;     # change ''one (two)'' to ''one'' (two)
-
-    return "[[:$page|$title]]"
 }
 
 #
