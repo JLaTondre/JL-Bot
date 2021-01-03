@@ -158,6 +158,40 @@ my $vital;            # hold vital template parsing errors
 # Subroutines
 #
 
+sub determineDates {
+
+    # Determine dates to use in <small> output. Handles multiple DYK dates.
+
+    my $info = shift;
+    my $page = shift;
+    my $type = shift;
+    my $order = shift;
+    my $blurb = shift;
+
+    if (($type eq 'content-did-you-know-articles') and (not $blurb)) {
+        my @direction;
+        if ($order eq "decreasing") {
+            @direction = sort { $b cmp $a } keys %{$info->{$page}->{dyk}};
+        }
+        else {
+            @direction = sort keys %{$info->{$page}->{dyk}};
+        }
+        my $index = 0;
+        my $combined;
+        for my $date (@direction) {
+            $index++;
+            $combined .= ', ' unless ($index == 1);
+            $combined .= $date;
+        }
+        return " <small>($combined)</small>";
+    }
+    elsif ($type ne 'content-did-you-know-articles') {
+        return " <small>($info->{$page}->{date}->{$type})</small>";
+    }
+
+    return '';
+}
+
 sub getContent {
 
     # This subroutine retrieves applicable content from a source.   It is passed
@@ -208,14 +242,14 @@ sub getPageInfo {
 
     # parse date types
 
-    $info->{date}->{'content-did-you-know-articles'} = parseDYKDates($text, $talk);
     $info->{date}->{'content-mainpage-in-the-news'} = parseMainPageNews($text, $talk);
     $info->{date}->{'content-mainpage-featured'} = parseMainPageFeatured($text, $talk);
     $info->{date}->{'content-mainpage-lists'} = $info->{date}->{'content-mainpage-featured'};
 
-    # dyk blurb
+    # parse dyk
 
-    $info->{blurb} = parseDYKBlurb($text, $page, $talk);
+    $info->{dyk} = parseDYK($page, $talk, $text);
+    $info->{date}->{'content-did-you-know-articles'} = (sort keys %{$info->{dyk}})[0];
 
     # picture date (separate as template is on picture page, not talk)
 
@@ -606,10 +640,11 @@ sub getParameters {
 
 sub findTemplates {
 
-    # This subroutine finds a template in a text string.  It is passed the text
-    # and returns an array reference containing the templates.
+    # This subroutine finds templates in a text string.  It is passed the text and a
+    # pattern to filter results.  It returns an array reference containing the templates.
 
     my $text = shift;
+    my $pattern = shift;
 
     # the following code is based on perlfaq6's "Can I use Perl regular
     # expressions to match balanced text?" example
@@ -632,7 +667,9 @@ sub findTemplates {
     while( @queue ) {
         my $string = shift @queue;
         my @matches = $string =~ m/$regex/go;
-        @templates = (@templates, @matches);
+        if ($string =~ /$pattern/i) {
+            @templates = (@templates, @matches);
+        }
         unshift @queue, map { s/^\{\{//; s/\}\}$//; $_ } @matches;
     }
 
@@ -651,172 +688,212 @@ sub italicizePage {
     return "[[:$page|$title]]"
 }
 
-sub parseDYKBlurb {
+sub parseArticleHistory {
 
-    # This function parses the DYK blurb
+    # This function parses the Article History template
 
-    my $text = shift;
     my $page = shift;
     my $talk = shift;
+    my $text = shift;
 
-    my $blurb;
+    my $results;
 
-    my $templates = findTemplates($text);
-
-    # find first {{dyk talk}} template found
+    my $templates = findTemplates($text, 'article');
 
     for my $template (@$templates) {
-        if ($template =~ /^\{\{\s*(?:Template:\s*)?dyk\s*talk/i) {
 
-            if ($template =~ /^\{\{\s*(?:Template:\s*)?dyk\s*talk\s*\|.*?\|\s*entry\s*=\s*(.+)\}\}$/ims) {
-                $blurb = $1;
+        my $dates;
+        my $blurbs;
+
+        # extract the date & entry fields
+
+        if ($template =~ /^\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones)/i) {
+
+            $template =~ s/\{\{\s*-\?\s*\}\}/?/;        # replace templated question mark
+
+            while ($template =~ /\|\s*dyk(\d?)date\s*=\s*(.*?)\s*(?:\||$)/gims) {
+                my $count = $1 ? $1 : 'none';
+                my $ezdate = Date::EzDate->new($2);
+
+                my $date;
+                if ($ezdate) {
+                    $date = $ezdate->{'%Y-%m-%d'};
+                }
+                else {
+                    $date = '0000-00-00';
+                    $dyktalk->{$talk} = 1;
+                }
+
+                $dates->{$count} = $date;
             }
-            elsif ($template =~ /^\{\{\s*(?:Template:\s*)?dyk\s*talk\s*\|[^\|]+\|(?:\s*\d+\s*\|)?\s*(.+)\}\}$/ims) {
-                $blurb = $1;
-            }
 
-            if ($blurb) {
+            while ($template =~ /\|\s*dyk(\d?)entry\s*=\s*(.*?\?)/gims) {
+                my $count = $1 ? $1 : 'none';
+                my $blurb = $2;
 
-                # remove new lines
                 $blurb =~ s/\n//g;
 
-                # strip off excess fields
-                $blurb =~ s/(?:^|\s*\|)\s*article\s*=[^\|]+//;
-                $blurb =~ s/(?:^|\s*\|)\s*image\s*=[^\|]+//;
-                $blurb =~ s/(?:^|\s*\|)\s*nompage\s*=[^\|]+//;
-                $blurb =~ s/(?:^|\s*\|)\s*views\s*=[^\|]+//;
-                $blurb =~ s/(?:^|\s*\|)\s*small\s*=[^\|]+//;
-                $blurb =~ s/\{\{\s*\*\s*mp\s*\}\}//;
-                $blurb =~ s/<!--.*?-->//;
-                $blurb =~ s/\|\s*$//;
-
-                # if only year returned, then no blurb was provided
-                $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>" if ($blurb =~ /^\d+$/);
-
+                $blurbs->{$count} = $blurb;
             }
-            else {
-                $blurb = $page;
-                $dyktalk->{$talk} = 1;
-            }
-
-            last;
         }
-    }
 
-    # parse {{article history}} if not {{dyk talk}}
+        # combine them together
 
-    unless ($blurb) {
-
-        for my $template (@$templates) {
-            if ($template =~ /^\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones)/i) {
-
-                $template =~ /\|\s*dyk1?entry\s*=\s*(.*?)\s*$/ims;
-                $blurb = $1;
-
-                if ($blurb) {
-
-                    # remove new lines
-                    $blurb =~ s/\n//g;
-
-                    # handle case where template termination is not on separate line
-                    # only remove uneven ones as blurb could contain a template
-                    if ($blurb =~ /\}\}$/) {
-                        my $starting = () = $blurb =~ /\{\{/gi;
-                        my $ending = () = $blurb =~ /\}\}/g;
-                        $blurb =~ s/\}\}\s*$// if ($ending > $starting);
-                    }
-
-                    # strip off excess fields
-                    $blurb =~ s/\s*\|\s*action\d.*$//;
-                    $blurb =~ s/\s*\|\s*action\ddate.*$//;
-                    $blurb =~ s/\s*\|\s*action\dlink.*$//;
-                    $blurb =~ s/\s*\|\s*action\dresult.*$//;
-                    $blurb =~ s/\s*\|\s*action\doldid.*$//;
-                    $blurb =~ s/\s*\|\s*currentstatus.*$//;
-                    $blurb =~ s/\s*\|\s*itndate.*$//;
-                    $blurb =~ s/\s*\|\s*dykdate.*$//;
-                    $blurb =~ s/\s*\|\s*topic.*$//;
-                    $blurb =~ s/\s*\|\s*small.*$//;
-                    $blurb =~ s/\s*\|\s*sm.*$//;
-                    $blurb =~ s/\s*\|\s*nompage\s*=[^\|]+//;
-                    $blurb =~ s/\{\{\s*\*\s*mp\s*\}\}//;
-                    $blurb =~ s/<!--.*?-->//;
-
+        if ((scalar keys %$blurbs) >= (scalar keys %$dates)) {
+            for my $count (keys %$blurbs) {
+                my $date;
+                if (exists $dates->{$count}) {
+                    $date = $dates->{$count};
                 }
-
-                unless ($blurb) {
-                    # cannot use else as 'dykentry=' may be present with no content
-                    $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>";   # don't record error as likely dykentry not entered
+                else {
+                    $date = '0000-00-00';
+                    $dyktalk->{$talk} = 1;
                 }
-
-                last;
+                $results->{ $blurbs->{$count} }->{$date}= 1;
+            }
+        }
+        else {
+            for my $count (keys %$dates) {
+                my $blurb;
+                if (exists $blurbs->{$count}) {
+                    $blurb = $blurbs->{$count};
+                }
+                else {
+                    $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>";
+                    # $dyktalk->{$talk} = 1; don't record errors for missing blurb as pretty standard
+                }
+                $results->{$blurb}->{ $dates->{$count} }= 1;
             }
         }
 
     }
 
-    # if no blurb, then matching template not found
-
-    unless ($blurb) {
-        $blurb = 'NONE';
-    }
-
-    $blurb =~ s/^...that/... that/;        # normalize start so always space after ellipse
-
-    return $blurb
+    return $results;
 }
 
-sub parseDYKDates {
+sub parseDYK {
 
-    # This function parses the talk page for the DYK date
+    # This function parses the DYK blurb & date
 
-    my $text = shift;
+    my $page = shift;
     my $talk = shift;
+    my $text = shift;
 
-    my $result = 'NONE';
+    my $intermediate;
 
-    # look for DYK talk first
+    # determine if {{dyk talk}} or {{article history}}
 
-    if ($text =~ /\{\{\s*(?:Template:\s*)?dyk\s*talk/ims) {
-        if ($text =~ /\{\{\s*(?:Template:\s*)?dyk\s*talk\s*\|\s*(?:\[\[\s*)?([\w\d\s,]+)(?:\]\]\s*)?\s*(?:\||\s)\s*(?:\[\[\s*)?(\d+)/ims) {
-            my $date = $1;
-            my $year = $2;
+    if ($text =~ /\{\{\s*(?:Template:\s*)?dyk\s*talk/i) {
+        $intermediate = parseDYKTalk($page, $talk, $text);
+    }
+    else {
+        $intermediate = parseArticleHistory($page, $talk, $text);
+    }
 
-            if ( ($date) and ($year) ) {
-                my $ezdate = Date::EzDate->new("$date $year");
-                $result = $ezdate->{'%Y-%m-%d'};
-                # if date found, return it
-                # otherwise see if article history has date
-                return $result;
+    # combine duplicates
+
+    my $final;
+
+    for my $blurb (keys %$intermediate) {
+        my $index = 0;
+        my $combined;
+        for my $date (sort keys %{$intermediate->{$blurb}}) {
+            $index++;
+            $combined .= ', ' unless ($index == 1);
+            $combined .= $date;
+        }
+        $blurb =~ s/^...that/... that/;        # normalize start so always space after ellipse
+        $final->{$combined} = $blurb;
+    }
+
+    return $final;
+}
+
+sub parseDYKTalk {
+
+    # This function parses the DYK Talk template
+
+    my $page = shift;
+    my $talk = shift;
+    my $text = shift;
+
+    my $results;
+
+    my $templates = findTemplates($text, 'dyk');
+
+    for my $template (@$templates) {
+
+        if ($template =~ s/^\{\{\s*(?:Template:\s*)?dyk\s*talk//i) {
+
+            my $date;
+            my $blurb;
+
+            $template =~ s/\n//g;
+
+            # remove extraneous parameters
+
+            $template =~ s/\|\s*article\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*blp\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*bypass-error\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*class\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*collapsed\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*dyklink\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*image\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*importance\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*listas\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*nompage\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*num\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*num2\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*small\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*SIART\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*SIART-importance\s*=.*?(?=[\|\}])//;
+            $template =~ s/\|\s*views\s*=.*?(?=[\|\}])//;
+            $template =~ s/<!--.*?-->//;
+
+            $template =~ s/\{\{\s*-\?\s*\}\}/?/;        # replace templated question mark
+
+            # extract date
+
+            my $ezdate;
+
+            if ($template =~ s/\|\s*(?:1\s*=\s*)?(\d{1,2}\s+\w+)\s*\|?\s*(\d{4})\s*(?=[\|\}])//) {
+                # dd month year
+                # dd month | year
+                $ezdate = Date::EzDate->new("$1 $2");
+            }
+            elsif ($template =~ s/\|\s*(\w+\s+\d{1,2}),?\s*\|\s*(\d{4})\s*(?=[\|\}])//) {
+                # month dd | year
+                $ezdate = Date::EzDate->new("$1 $2");
             }
             else {
-                $result = '0000-00-00';
+                $date = '0000-00-00';
                 $dyktalk->{$talk} = 1;
             }
+
+            if ($ezdate) {
+                $date = $ezdate->{'%Y-%m-%d'};
+            }
+            else {
+                $date = '0000-00-00';
+                $dyktalk->{$talk} = 1;
+            }
+
+            # extract blurb
+
+            if ($template =~ s/\|?\|(?:\s*(?:entry|2|3)\s*=)?\s*(.+)\s*\}\}$//) {
+                $blurb = $1;
+            }
+            else {
+                $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>";
+                # $dyktalk->{$talk} = 1; don't record errors for missing blurb as pretty standard
+            }
+
+            $results->{$blurb}->{$date}= 1;
         }
-        else {
-            $result = '0000-00-00';
-            $dyktalk->{$talk} = 1;
-        }
+
     }
 
-    # look for article history second
-
-    if ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*dyk1?date\s*=\s*(?:\[\[\s*)?([\w\d\s,\-]+)/ims) {
-        my $date = $1;
-        chomp $date;
-
-        if ($date) {
-            my $ezdate = Date::EzDate->new($date);
-            $result = $ezdate->{'%Y-%m-%d'};
-        }
-        else {
-            $result = '0000-00-00';
-            $articlehistory->{$talk} = 1;
-        }
-    }
-
-    return $result;
+    return $results;
 }
 
 sub parseMainPageFeatured {
@@ -1357,7 +1434,20 @@ for my $update (sort keys %$toUpdate) {
 
                     if (($dykblurb) and ($type eq 'content-did-you-know-articles')) {
                         $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
-                        $listing = $pageInfo->{$page}->{blurb};
+                        my @direction;
+                        if ($dateOrder eq "decreasing") {
+                            @direction = sort { $b cmp $a } keys %{$pageInfo->{$page}->{dyk}};
+                        }
+                        else {
+                            @direction = sort keys %{$pageInfo->{$page}->{dyk}};
+                        }
+                        $listing = '';
+                        my $index = 0;
+                        for my $date (@direction) {
+                            $index++;
+                            $listing .= '<br>' unless ($index == 1);
+                            $listing .= "$pageInfo->{$page}->{dyk}->{$date} <small>($date)</small>";
+                        }
                         (my $normalized = $listing) =~ s/(?:&nbsp;|\s)+/ /g;        # normalize &nbsp; and whitespace (included due to unicode spaces)
                         if ($dykseen->{$normalized}) {
 
@@ -1383,8 +1473,7 @@ for my $update (sort keys %$toUpdate) {
                         $output .= $listing;
                         if (($dates) and (exists $dateTypes{$type})) {
                             $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
-                            $sort = $pageInfo->{$page}->{date}->{$type};
-                            $output .= " <small>($sort)</small>"
+                            $output .= determineDates($pageInfo, $page, $type, $dateOrder, $dykblurb);
                         }
                         $output .= " •\n";
                     }
@@ -1399,8 +1488,7 @@ for my $update (sort keys %$toUpdate) {
                             }
                             if (($dates) and (exists $dateTypes{$type})) {
                                 $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
-                                $sort = $pageInfo->{$page}->{date}->{$type};
-                                $output .= " <small>($sort)</small>"
+                                $output .= determineDates($pageInfo, $page, $type, $dateOrder, $dykblurb);
                             }
                             $output .= "\n";
                         }
@@ -1408,8 +1496,7 @@ for my $update (sort keys %$toUpdate) {
                             $output .=  "*$listing";
                             if (($dates) and (exists $dateTypes{$type})) {
                                 $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
-                                $sort = $pageInfo->{$page}->{date}->{$type};
-                                $output .= " <small>($sort)</small>"
+                                $output .= determineDates($pageInfo, $page, $type, $dateOrder, $dykblurb);
                             }
                             $output .= "\n";
                         }
@@ -1471,8 +1558,7 @@ for my $update (sort keys %$toUpdate) {
                     }
                     if (($dates) and (exists $dateTypes{$type})) {
                         $pageInfo->{$page} = getPageInfo($bot, $page) unless (exists $pageInfo->{$page});
-                        $sort = $pageInfo->{$page}->{date}->{$type};
-                        $output .= " <small>($sort)</small>"
+                        $output .= determineDates($pageInfo, $page, $type, $dateOrder, $dykblurb);
                     }
                     $output .= "\n";
                 }
