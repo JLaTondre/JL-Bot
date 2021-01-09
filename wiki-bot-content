@@ -1446,7 +1446,8 @@ for my $update (sort keys %$toUpdate) {
                         for my $date (@direction) {
                             $index++;
                             $listing .= '<br>' unless ($index == 1);
-                            $listing .= "$pageInfo->{$page}->{dyk}->{$date} <small>($date)</small>";
+                            $listing .= $pageInfo->{$page}->{dyk}->{$date};
+                            $listing .= " <small>($date)</small>" if ($dates);
                         }
                         (my $normalized = $listing) =~ s/(?:&nbsp;|\s)+/ /g;        # normalize &nbsp; and whitespace (included due to unicode spaces)
                         if ($dykseen->{$normalized}) {
