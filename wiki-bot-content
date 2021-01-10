@@ -700,16 +700,16 @@ sub parseArticleHistory {
 
     my $templates = findTemplates($text, 'article');
 
-    for my $template (@$templates) {
+    my $dates;
+    my $blurbs;
 
-        my $dates;
-        my $blurbs;
+    for my $template (@$templates) {
 
         # extract the date & entry fields
 
         if ($template =~ /^\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones)/i) {
 
-            $template =~ s/\{\{\s*-\?\s*\}\}/?/;        # replace templated question mark
+            $template =~ s/\{\{\s*-\?\s*\}\}/<JL-Bot question>?/;        # escape templated question mark
 
             while ($template =~ /\|\s*dyk(\d?)date\s*=\s*(.*?)\s*(?:\||$)/gims) {
                 my $count = $1 ? $1 : 'none';
@@ -727,45 +727,66 @@ sub parseArticleHistory {
                 $dates->{$count} = $date;
             }
 
-            while ($template =~ /\|\s*dyk(\d?)entry\s*=\s*(.*?\?)/gims) {
+            while ($template =~ /\|\s*dyk(\d?)entry\s*=\s*(.*?)(?:^\s*\|\s*(?!adj|abbr|sigfig|sp)[\w\d]+\s*=|\}\}$)/gims) {
                 my $count = $1 ? $1 : 'none';
                 my $blurb = $2;
 
                 $blurb =~ s/\n//g;
+                $blurb =~ s/<!--.*?-->//;
+                $blurb =~ s/\|\s*action\d?\s*=.*//;
+                $blurb =~ s/\|\s*currentstatus\s*=.*//;
+                $blurb =~ s/\|\s*dyk\d*date\s*=.*//;
+                $blurb =~ s/\|\s*dykimage\s*=.*//;
+                $blurb =~ s/\|\s*dyklink\s*=.*//;
+                $blurb =~ s/\|\s*dyknom\s*=.*//;
+                $blurb =~ s/\|\s*dykviews\s*=.*//;
+                $blurb =~ s/\|\s*four\s*=.*//;
+                $blurb =~ s/\|\s*ftname\s*=.*//;
+                $blurb =~ s/\|\s*image\s*=.*//;
+                $blurb =~ s/\|\s*itndate\s*=.*//;
+                $blurb =~ s/\|\s*maindate\s*=.*//;
+                $blurb =~ s/\|\s*nompage\s*=.*//;
+                $blurb =~ s/\|\s*otd\d?date\s*=.*//;
+                $blurb =~ s/\|\s*small\s*=.*//;
+                $blurb =~ s/\|\s*topic\s*=.*//;
+                $blurb =~ s/\|\s*views\s*=.*//;
+                $blurb =~ s/\s*\|+\s*$//;
 
-                $blurbs->{$count} = $blurb;
+                $blurb =~ s/<JL-Bot question>\?/{{-?}}/;        # restore templated question mark
+
+                $blurbs->{$count} = $blurb if ($blurb);
             }
         }
 
-        # combine them together
+    }
 
-        if ((scalar keys %$blurbs) >= (scalar keys %$dates)) {
-            for my $count (keys %$blurbs) {
-                my $date;
-                if (exists $dates->{$count}) {
-                    $date = $dates->{$count};
-                }
-                else {
-                    $date = '0000-00-00';
-                    $dyktalk->{$talk} = 1;
-                }
-                $results->{ $blurbs->{$count} }->{$date}= 1;
-            }
-        }
-        else {
-            for my $count (keys %$dates) {
-                my $blurb;
-                if (exists $blurbs->{$count}) {
-                    $blurb = $blurbs->{$count};
-                }
-                else {
-                    $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>";
-                    # $dyktalk->{$talk} = 1; don't record errors for missing blurb as pretty standard
-                }
-                $results->{$blurb}->{ $dates->{$count} }= 1;
-            }
-        }
+    # combine them together
 
+    if ((scalar keys %$blurbs) >= (scalar keys %$dates)) {
+        for my $count (keys %$blurbs) {
+            my $date;
+            if (exists $dates->{$count}) {
+                $date = $dates->{$count};
+            }
+            else {
+                $date = '0000-00-00';
+                $dyktalk->{$talk} = 1;
+            }
+            $results->{ $blurbs->{$count} }->{$date}= 1;
+        }
+    }
+    else {
+        for my $count (keys %$dates) {
+            my $blurb;
+            if (exists $blurbs->{$count}) {
+                $blurb = $blurbs->{$count};
+            }
+            else {
+                $blurb = '[[' . $page . "]] <small>(article's talk page missing blurb)</small>";
+                # $dyktalk->{$talk} = 1; don't record errors for missing blurb as pretty standard
+            }
+            $results->{$blurb}->{ $dates->{$count} }= 1;
+        }
     }
 
     return $results;
@@ -802,7 +823,8 @@ sub parseDYK {
             $combined .= ', ' unless ($index == 1);
             $combined .= $date;
         }
-        $blurb =~ s/^...that/... that/;        # normalize start so always space after ellipse
+        $blurb =~ s/^...that/... that/;         # normalize start so always space after ellipse
+        $blurb =~ s/\s+$//;                     # remove extraneous spaces at end
         $final->{$combined} = $blurb;
     }
 
@@ -832,6 +854,7 @@ sub parseDYKTalk {
 
             # remove extraneous parameters
 
+            $template =~ s/<!--.*?-->//;
             $template =~ s/\|\s*article\s*=.*?(?=[\|\}])//;
             $template =~ s/\|\s*blp\s*=.*?(?=[\|\}])//;
             $template =~ s/\|\s*bypass-error\s*=.*?(?=[\|\}])//;
@@ -848,9 +871,6 @@ sub parseDYKTalk {
             $template =~ s/\|\s*SIART\s*=.*?(?=[\|\}])//;
             $template =~ s/\|\s*SIART-importance\s*=.*?(?=[\|\}])//;
             $template =~ s/\|\s*views\s*=.*?(?=[\|\}])//;
-            $template =~ s/<!--.*?-->//;
-
-            $template =~ s/\{\{\s*-\?\s*\}\}/?/;        # replace templated question mark
 
             # extract date
 
