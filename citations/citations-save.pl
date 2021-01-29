@@ -1312,7 +1312,7 @@ if ($saveFPCounts) {
             $templates->{$target}->{'exclude'}->{$new} = 1;
 
         }
-        elsif ($line =~ /^\s*<\/div>\s*$/) {
+        elsif ($line =~ /^\s*\{\{\s*div col end\s*\}\}\s*$/) {
             # end of section so output sorted templates
             for my $target (sort { sortCitations($a, $b) } keys %$templates) {
                 for my $template (sort sortTemplates keys %{$templates->{$target}}) {
@@ -1321,7 +1321,7 @@ if ($saveFPCounts) {
                     }
                 }
             }
-            $output .= "</div>\n";
+            $output .= "{{div col end}}\n";
             $templates = {};
 
         }
