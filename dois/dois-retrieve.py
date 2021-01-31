@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
-import getopt
-import glob
+from enum import unique
 import os
 import re
 import requests
@@ -9,10 +8,11 @@ import sys
 import time
 import traceback
 
+from collections import defaultdict
 from datetime import date
-from itertools import chain
 from mwclient import Site
 from tqdm import tqdm
+
 
 #
 # Configuration
@@ -26,7 +26,9 @@ if 'WIKI_CONFIG_DIR' not in os.environ:
     sys.stderr.write('ERROR: WIKI_CONFIG_DIR environment variable not set\n')
     sys.exit(1)
 
-API = 'https://api.crossref.org/prefixes/'
+APIMEMBERS = 'https://api.crossref.org/members/'
+APIPREFIXES = 'https://api.crossref.org/prefixes/'
+BLOCKSIZE = 500             # API supports 1000, but fails to return all results at that size
 
 BOTINFO = os.environ['WIKI_CONFIG_DIR'] + '/bot-info.txt'
 EMAILINFO = os.environ['WIKI_CONFIG_DIR'] + '/email-info.txt'
@@ -122,24 +124,131 @@ def getUserInfo(filename):
     return userinfo
 
 
-def isValidTitle(title):
+def isValidPrefix(prefix, registrant):
 
-    # Does some simple tests to check if valid Wikipedia title
+    # Ignore invalid (test) prefixes returned by Crossref members API
 
-    # check interwiki title
-    match = re.search(r'^\w{2}:', crossref, re.IGNORECASE)
-    if match:
+    if not re.search('^10.\d{4,5}$', prefix):
         return False
 
-    # check invalid characters
-    match = re.search(r'[#<>\[\]\|{}_\/]', crossref)
-    if match:
+    if re.search('^10.[89]\d{4}$', prefix):
+        return False
+
+    if (
+        registrant == 'Derg Test Account' or
+        registrant == 'Service Provider test account' or
+        registrant == 'Test accounts'
+    ):
         return False
 
     return True
 
 
-def queryCrossref(doi, api, email):
+def isValidTitle(title):
+
+    # Does some simple tests to check if valid Wikipedia title
+
+    # check interwiki title
+    if re.search(r'^\w{2}:', title, re.IGNORECASE):
+        return False
+
+    # check invalid characters
+    if re.search(r'[#<>\[\]\|{}_\/]', title):
+        return False
+
+    return True
+
+
+def queryCrossref(email, apiMembers, apiPrefixes, blocksize):
+
+    # Retrieve registrant names from Crossref by first calling the members API
+    # and then using the prefixes API to resolve any ambiguities
+
+    print('Retrieving Crossref members ...')
+
+    members = queryCrossrefMembers(email, apiMembers, blocksize)
+
+    print('Resolving Crossref ambiguities ...')
+
+    results = {}
+
+    start = 0
+    for prefix in tqdm(members, leave=None):
+        unique = set(members[prefix])
+        if len(unique) > 1:
+            end = time.time()
+            delta = end - start
+            if delta < 1:
+                time.sleep(1 - delta)
+            registrant = queryCrossrefPrefixes(prefix, email, apiPrefixes)
+            start = time.time()
+        else:
+            registrant = members[prefix][0]
+
+        if isValidPrefix(prefix, registrant):
+            order = prefix.replace('10.', '')
+            results[order] = (prefix, registrant)
+
+    return results
+
+
+def queryCrossrefMembers(email, api, blocksize):
+
+    # Retrieve registrant names from Crossref via the members API
+
+    results = defaultdict(list)
+
+    offset = 0
+    total = 1
+
+    while offset < total:
+
+        start = time.time()
+
+        url = api + '?rows=1000&offset=' + str(offset) + '&mailto=' + email
+
+        try:
+            r = requests.get(url)
+        except requests.exceptions.RequestException as e:
+            sys.stderr.write('ERROR: Unable to retrieve URL.\n')
+            sys.stderr.write('URL = ' + url + '\n')
+            sys.stderr.write('Exception = ' + str(e) + '\n')
+            sys.exit(1)
+        else:
+
+            if r.headers['X-Rate-Limit-Interval'] != '1s':
+                print('WARNING: X-Rate-Limit-Interval changed. It is now', r.headers['X-Rate-Limit-Interval'])
+
+            if r.status_code == 404:
+                sys.stderr.write('ERROR: 404 status code')
+                sys.stderr.write('URL = ' + url + '\n')
+                sys.exit(1)
+
+            if r.status_code != 200:
+                sys.stderr.write('ERROR: Unexpected status code.\n')
+                sys.stderr.write('URL  = ' + url + '\n')
+                sys.stderr.write('Code = ' + str(r.status_code) + '\n')
+                sys.exit(1)
+
+            total = r.json()['message']['total-results']
+
+            for item in r.json()['message']['items']:
+                name = item['primary-name']
+                prefixes = item['prefixes']
+                for prefix in prefixes:
+                    results[prefix].append(name)
+
+            end = time.time()
+            delta = end - start
+            if delta < 1:
+                time.sleep(1 - delta)
+
+            offset += blocksize
+
+    return results
+
+
+def queryCrossrefPrefixes(doi, email, api):
 
     # Retrieve registrant name from Crossref
 
@@ -180,9 +289,6 @@ def queryWikipediaCrossref(title, site):
 
     # Retrieve target of Crossref name (if redirect)
 
-    if title == 'NONE':
-        return 'NONE'
-
     page = site.pages[title]
 
     if not page.exists:
@@ -220,36 +326,10 @@ def queryWikipediaDOI(prefix, site):
 
     return (registrant, target)
 
+
 #
 # Main
 #
-
-resume = False
-
-try:
-    arguments, values = getopt.getopt(sys.argv[1:], 'hr:')
-except getopt.error as err:
-    print(str(err))
-    sys.exit(2)
-
-for argument, value in arguments:
-    if argument == '-h':
-        print('dois-retrieve.py [-h] [-r DATESTAMP')
-        print('  where -r = resume file with DATESTAMP')
-        sys.exit(0)
-    elif argument == '-r':
-        resume = value
-
-if resume:
-    filename = os.environ['WIKI_WORKING_DIR'] + '/Dois/doi-registrants-' + resume
-    option = 'a'
-    start = getStart(filename)
-else:
-    filename = os.environ['WIKI_WORKING_DIR'] + '/Dois/doi-registrants-' + date.today().strftime('%Y%m%d')
-    start = 1001
-    option = 'w'
-
-# initiate bot
 
 userinfo = getUserInfo(BOTINFO)
 email = getEmail(EMAILINFO)
@@ -261,24 +341,24 @@ except Exception:
     traceback.print_exc()
     sys.exit(1)
 
-# open file and iterate through prefixes
+crossref = queryCrossref(email, APIMEMBERS, APIPREFIXES, BLOCKSIZE)
 
-file = open(filename, option, 1)
+filename = os.environ['WIKI_WORKING_DIR'] + '/Dois/doi-registrants-' + date.today().strftime('%Y%m%d')
+file = open(filename, 'w', 1)
 
-for suffix in tqdm(range(start, 50000), leave=False):
-    start = time.time()
-    prefix = '10.' + str(suffix)
-    crossref = queryCrossref(prefix, API, email)
-    if isValidTitle(crossref):
-        target = queryWikipediaCrossref(crossref, site)
+print('Retrieving Wikipedia data ...')
+
+for order in tqdm(sorted(crossref, key=int), leave=None):
+
+    prefix = crossref[order][0]
+    registrant = crossref[order][1]
+
+    if isValidTitle(registrant):
+        target = queryWikipediaCrossref(registrant, site)
         wikipedia = queryWikipediaDOI(prefix, site)
-        end = time.time()
-        delta = end - start
-        if delta < 1:
-            time.sleep(1 - delta)
-        file.write('\t'.join((prefix, crossref, wikipedia[0], target, wikipedia[1])) + '\n')
+        file.write('\t'.join((prefix, registrant, wikipedia[0], target, wikipedia[1])) + '\n')
     else:
-        file.write('\t'.join((prefix, crossref, 'NONE', 'INVALID', 'NONE')) + '\n')
+        file.write('\t'.join((prefix, registrant, 'NONE', 'INVALID', 'NONE')) + '\n')
 
 file.close()
 
