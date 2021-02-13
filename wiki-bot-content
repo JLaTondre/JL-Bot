@@ -360,6 +360,7 @@ sub getParameters {
             my $type     = $1;
             my $level    = $2;
             my $category = $3;
+            next if ($category =~ /^\s*$/);
             $category = "Category:$category" unless ($category =~ /^Category:/);
             next if (exists $duplicate{$type});           # ignore if already been seen
             $duplicate{$type} = 1;
