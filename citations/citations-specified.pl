@@ -873,18 +873,15 @@ $dbSpecific->commit;
 
 # retrieve each type & save revisions
 
-my $publishers;
-my $questionables;
-
+my ($publishers, $pRevision) = retrieveSpecified($BOTINFO, 'publisher', \@PUBLISHER);
 if ($processPublishers) {
-    ($publishers, my $pRevision) = retrieveSpecified($BOTINFO, 'publisher', \@PUBLISHER);
     $sth = $dbSpecific->prepare('INSERT INTO revisions VALUES (?, ?)');
     $sth->execute('publisher', $pRevision);
     $dbSpecific->commit;
 }
 
+my ($questionables, $qRevision) = retrieveSpecified($BOTINFO, 'questionable', \@QUESTIONABLE);
 if ($processQuestionable) {
-    ($questionables, my $qRevision) = retrieveSpecified($BOTINFO, 'questionable', \@QUESTIONABLE);
     $sth = $dbSpecific->prepare('INSERT INTO revisions VALUES (?, ?)');
     $sth->execute('questionable', $qRevision);
     $dbSpecific->commit;
@@ -937,45 +934,49 @@ print "  processing normalizations ...                                  \n";
 
 # put it together
 
-print "  generating publisher results ...\n";
-for my $publisher (keys %$publishers) {
-    my $patterns = findPatternCitations($dbSpecific, $publishers->{$publisher}->{'pattern'});
-    my $dois = findDOICitations($dbSpecific, $publishers->{$publisher}->{'doi'});
-    my $result = generateResult(
-        $publisher,
-        $publishers->{$publisher},
-        $specified,
-        $patterns,
-        $dois,
-        $redirects,
-        $normalizations,
-        $falsePositives,
-        $dbSpecific,
-        $dbTitles
-    );
-    saveResult($dbSpecific, 'publishers', $publisher, $result) if ($result);
+if ($processPublishers) {
+    print "  generating publisher results ...\n";
+    for my $publisher (keys %$publishers) {
+        my $patterns = findPatternCitations($dbSpecific, $publishers->{$publisher}->{'pattern'});
+        my $dois = findDOICitations($dbSpecific, $publishers->{$publisher}->{'doi'});
+        my $result = generateResult(
+            $publisher,
+            $publishers->{$publisher},
+            $specified,
+            $patterns,
+            $dois,
+            $redirects,
+            $normalizations,
+            $falsePositives,
+            $dbSpecific,
+            $dbTitles
+        );
+        saveResult($dbSpecific, 'publishers', $publisher, $result) if ($result);
+    }
+    $dbSpecific->commit;
 }
-$dbSpecific->commit;
 
-print "  generating questionable results ...\n";
-for my $questionable (keys %$questionables) {
-    my $patterns = findPatternCitations($dbSpecific, $questionables->{$questionable}->{'pattern'});
-    my $dois = findDOICitations($dbSpecific, $questionables->{$questionable}->{'doi'});
-    my $result = generateResult(
-        $questionable,
-        $questionables->{$questionable},
-        $specified,
-        $patterns,
-        $dois,
-        $redirects,
-        $normalizations,
-        $falsePositives,
-        $dbSpecific,
-        $dbTitles
-    );
-    saveResult($dbSpecific, 'questionables', $questionable, $result) if ($result);
+if ($processQuestionable) {
+    print "  generating questionable results ...\n";
+    for my $questionable (keys %$questionables) {
+        my $patterns = findPatternCitations($dbSpecific, $questionables->{$questionable}->{'pattern'});
+        my $dois = findDOICitations($dbSpecific, $questionables->{$questionable}->{'doi'});
+        my $result = generateResult(
+            $questionable,
+            $questionables->{$questionable},
+            $specified,
+            $patterns,
+            $dois,
+            $redirects,
+            $normalizations,
+            $falsePositives,
+            $dbSpecific,
+            $dbTitles
+        );
+        saveResult($dbSpecific, 'questionables', $questionable, $result) if ($result);
+    }
+    $dbSpecific->commit;
 }
-$dbSpecific->commit;
 
 $dbSpecific->disconnect;
 $dbTitles->disconnect;
