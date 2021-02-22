@@ -66,7 +66,7 @@ sub extractDoiField {
     # should only be one |doi= field but match last (by using .* at start) in
     # case there is more than one (since that is the one displayed)
 
-    if ($citation =~ /.*\|\s*doi\s*=\s*(.*?)\s*(?=\||\}\}$)/ig) {
+    if ($citation =~ /.*\|\s*doi\s*=\s*(?:\(\(\s*)?(.*?)(?:\s*\)\))?\s*(?=\||\}\}$)/ig) {
         return validateDoi($1);
     }
 
@@ -416,7 +416,10 @@ sub validateDoi {
     $field =~ s#^https?://(?:dx\.)?doi\.org/##;
     $field =~ s/^doi://;
     my $result = {};
-    if ($field =~ /^(10\.\d{4,5})/) {
+    if ($field =~ /^(10\.\d{6})/) {
+        $result->{'prefix'} = 'INVALID';
+    }
+    elsif ($field =~ /^(10\.\d{4,5})/) {
         my $prefix = $1;
         if ($prefix < 10.1) {
             $result->{'prefix'} = 'INVALID';
