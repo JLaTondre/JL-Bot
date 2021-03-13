@@ -587,6 +587,7 @@ sub normalizeCitation {
             new                 |
             nouv(?:elle)?       |
             novaya              |
+            nuevas?             |
             orig(?:inal)?       |
             supplement(?:um)?   |
             first               |
@@ -665,6 +666,7 @@ sub normalizeCitation {
         (?:
             nouv(?:elle|\.)?    |
             novaya              |
+            nuevas?             |
             orig(?:inal|\.)?    |
             one                 |
             two                 |
