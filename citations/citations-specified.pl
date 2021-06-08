@@ -115,7 +115,8 @@ sub combineSpecified {
     my $allRedirects;
 
     for my $selected (keys %$combined) {
-        my $redirects = loadRedirects($database, $selected);
+        my $temporary = $selected =~ s/^://r;
+        my $redirects = loadRedirects($database, $temporary);
         for my $redirect (keys %$redirects) {
             next if ($redirect =~ /^10\.\d+$/);                         # skip DOI redirects
             $combined->{$redirect} = undef;
@@ -692,6 +693,9 @@ sub retrieveSpecified {
                                 for my $member (keys %$members) {
                                     $specified->{$target}->{'selected'}->{$member} = 1;
                                 }
+                                # include category also so redirects to category are picked up
+                                # category targets have a leading ':'
+                                $specified->{$target}->{'selected'}->{':' . $term} = 1;
                             }
                             else {
                                 $specified->{$target}->{'selected'}->{$term} = 1;
