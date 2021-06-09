@@ -115,7 +115,8 @@ sub combineSpecified {
     my $allRedirects;
 
     for my $selected (keys %$combined) {
-        my $redirects = loadRedirects($database, $selected);
+        my $temporary = $selected =~ s/^://r;
+        my $redirects = loadRedirects($database, $temporary);
         for my $redirect (keys %$redirects) {
             next if ($redirect =~ /^10\.\d+$/);                         # skip DOI redirects
             $combined->{$redirect} = undef;
@@ -692,6 +693,9 @@ sub retrieveSpecified {
                                 for my $member (keys %$members) {
                                     $specified->{$target}->{'selected'}->{$member} = 1;
                                 }
+                                # include category also so redirects to category are picked up
+                                # category targets have a leading ':'
+                                $specified->{$target}->{'selected'}->{':' . $term} = 1;
                             }
                             else {
                                 $specified->{$target}->{'selected'}->{$term} = 1;
@@ -724,6 +728,19 @@ sub retrieveSpecified {
 
                 }
                 elsif ($template eq 'doi-redirects') {
+                    # use 'doi-redirects' target as a selected if 'doi-redirects' exists w/o 'selected'
+                    if ((not exists $specified->{$target}) or (not exists $specified->{':' . $target})) {
+                        if ($target =~/^Category:/) {
+                            my $members = $bot->getCategoryMembers($target);
+                            for my $member (keys %$members) {
+                                $specified->{$target}->{'selected'}->{$member} = 1;
+                            }
+                            $specified->{$target}->{'selected'}->{':' . $target} = 1;
+                        }
+                        else {
+                            $specified->{$target}->{'selected'}->{$target} = 1;
+                        }
+                    }
                     if ($additional) {
                         my @terms = split(/\|/, $additional);
                         for my $term (@terms) {
@@ -763,6 +780,8 @@ sub saveResult {
     my $doi = $result->{'doi'};
     my $source = $result->{'source'};
     my $note = $result->{'note'};
+
+    $target =~ s/^Category:(.+) academic journals$/$1/;
 
     my $sth = $database->prepare(qq{
         INSERT INTO $table (target, entries, entryCount, lineCount, articles, citations, source, note, doi)
