@@ -141,7 +141,7 @@ for prefix in current:
 
 for prefix in previous:
     if prefix not in current:
-        results.append('| [[' + prefix + ']] || [[' + previous[prefix] + ']] || NONE [https://api.crossref.org/prefixes/' + prefix + ' validate] ')
+        results.append('| [[' + prefix + ']] || [[' + previous[prefix] + ']] || NONE ([https://api.crossref.org/prefixes/' + prefix + ' validate]) ')
 
 # output results
 
