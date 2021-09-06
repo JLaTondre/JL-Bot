@@ -1575,7 +1575,7 @@ for my $update (sort keys %$toUpdate) {
                     my $page = $results->{$type}->{$sort};
                     $output .= "$page";
                     unless ($noCaptions) {
-                        my $caption = $page =~ s/^File:(.+?)(?:\.(?:tiff|tif|png|gif|jpg|jpeg|webp|xcf|pdf|mid|ogg|ogv|svg|djvu|oga|flac|opus|wav|webm|mp3|midi|mpg|mpeg))?$/$1/r;
+                        my $caption = $page =~ s/^File:(.+?)(?:\.(?:tiff|tif|png|gif|jpg|jpeg|webp|xcf|pdf|mid|ogg|ogv|svg|djvu|oga|flac|opus|wav|webm|mp3|midi|mpg|mpeg))?$/$1/ir;
                         $output .= "|$caption";
                     }
                     if (($dates) and (exists $dateTypes{$type})) {
