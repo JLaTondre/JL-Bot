@@ -266,6 +266,8 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*unicode\s*\|([^\}]+)\}\}/$1/ig;        # remove {{unicode|text}}
         $template =~ s/\s*\{\{\s*polytonic\s*\|([^\}]+)\}\}/$1/ig;      # remove {{polytonic|text}}
 
+        $template =~ s/\{\{\s*annotated link\s*\|([^\}\|]+).*?\}\}/$1/ig;;     # remove {{annotated link|text|...}}
+
         $template =~ s/\{\{\s*asiantitle\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;  # remove {{asiantitle|no|no|text|...}}
         $template =~ s/\{\{\s*asiantitle\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;          # remove {{asiantitle|no|text|...}}
         $template =~ s/\{\{\s*asiantitle\s*\|([^\}\|]+).*?\}\}/$1/ig;                  # remove {{asiantitle|text|...}}
@@ -333,6 +335,8 @@ sub removeTemplates {
         $template =~ s/\{\{\s*=\s*\}\}/=/ig;                            # replace {{=}}
         $template =~ s/\{\{\s*colon\s*\}\}/:/ig;                        # replace {{colon}}
 
+        $template =~ s/\{\{\s*bracket\s*\|([^\}]+)\}\}/\[$1\]/ig;       # replace {{bracket|text}}
+
         $template =~ s/,?\s*\{\{\s*ODNBsub\s*\}\}//ig;                  # remove {{ODNBsub}}
         $template =~ s/\s*\{\{\s*arxiv\s*\|[^\}]*\}\}//ig;              # remove {{arxiv}}
         $template =~ s/\s*\{\{\s*paywall\s*\}\}//ig;                    # remove {{paywall}}
@@ -353,9 +357,13 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*nowrap\s*\|([^\}]+)\}\}/$1/ig;            # remove {{nowrap|text}}
         $template =~ s/\{\{\s*noitalic\s*\|([^\}]+)\}\}/$1/ig;          # remove {{noitalic|text}}
+        $template =~ s/\{\{\s*small\s*\|([^\}]+)\}\}/$1/ig;             # remove {{small|text}}
         $template =~ s/\{\{\s*smallcaps\s*\|([^\}]+)\}\}/$1/ig;         # remove {{smallcaps|text}}
 
-        $template =~ s/\{\{\s*lc\s*\|([^\}]+)\}\}/\l$1/ig;              # remove {{lc|text}} where kept text is converted to lowercase
+        $template =~ s/\{\{\s*lc:\s*([^\}]+)\}\}/\L$1/ig;               # remove {{lc:text}} where kept text is converted to lowercase
+        $template =~ s/\{\{\s*uc:\s*([^\}]+)\}\}/\U$1/ig;               # remove {{uc:text}} where kept text is converted to uppercase
+        $template =~ s/\{\{\s*lcfirst:\s*(.)([^\}]+)\}\}/\l$1$2/ig;     # remove {{lcfirst:text}} where first letter of kept text is converted to lowercase
+        $template =~ s/\{\{\s*ucfirst:\s*(.)([^\}]+)\}\}/\u$1$2/ig;     # remove {{ucfirst:text}} where first letter of kept text is converted to uppercase
 
         $template =~ s/\s*\{\{\s*\^\s*\|([^\}]+)\}\}//ig;               # remove {{^|remove}}
         $template =~ s/\s*\{\{\s*void\s*\|([^\}]+)\}\}//ig;             # remove {{void|remove}}
