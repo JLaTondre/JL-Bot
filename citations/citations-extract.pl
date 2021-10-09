@@ -168,9 +168,6 @@ sub extractField {
 
         $field =~ s/<nowiki>\s*([^\<]+)\s*<\/nowiki>/$1/g;    # remove <nowiki>text</nowiki>
 
-        $field =~ s/\s\[[^\]]*\]\s*$//;                       # remove [note]$
-        $field =~ s/^\s*\[(.*)\]\s*$/$1/;                     # remove [text]$
-
         $field = decode_entities($field);                     # decode HTML entities (&amp; etc)
 
         $field =~ s/^\s*'{1,5}(.*?)'{1,5}$/$1/g;              # remove single quotes, italics, and bold
