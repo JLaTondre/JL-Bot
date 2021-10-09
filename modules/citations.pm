@@ -566,6 +566,8 @@ sub normalizeCitation {
     $term =~ s/\bn\.?[sf]\.?\b//g;                  # ns | nf
     $term =~ s/\bo\.?s\.?\b//g;                     # os
 
+    $term =~ s/\s\[[^\]]*\]\s*$//;                  # remove [note]$
+
     # everything else should be punctuation independent
 
     $term =~ s/[[:punct:]]+/ /g;                    # punctuation
