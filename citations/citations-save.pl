@@ -708,6 +708,7 @@ sub savePages {
     my $lTotal   = 0;                   # total lines output so far
     my $rMaximum = scalar(@$records);   # maximum records to output
     my $pStatus  = 0;                   # page's status
+    my $exceeded = 0;                   # exceeded page size
 
     my $output;                         # page output
 
@@ -731,6 +732,9 @@ sub savePages {
 
             $rPage++;
             $rTotal++;
+        }
+        else {
+            $exceeded = 1;
         }
 
         # if we reach the maximums for the page or the last possible record, end page
@@ -777,11 +781,12 @@ sub savePages {
 
             $pCurrent++;
 
-            if (($rPage > 1) and ($lTotal > $lMaximum)) {
+            if ($exceeded) {
                 # if exceeded max lines, didn't output current record
                 # so need to repeat loop to output
                 $rPage = 0;
                 $lTotal = 0;
+                $exceeded = 0;
                 redo;
             }
 
