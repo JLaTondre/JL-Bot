@@ -1557,6 +1557,7 @@ for my $update (sort keys %$toUpdate) {
                 if ($type eq 'content-did-you-know-articles') {
                     if (($dykblurb > 1) and ($count > $dykblurb)) {
                         $output .= "<includeonly>Transcluding $dykblurb of $count total</includeonly>";
+                        $output .= "\n" if (scalar(@$types) > 1);
                     }
                 }
 
