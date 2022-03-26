@@ -282,7 +282,8 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*URL\s*\|[^\|]+\|\s*(.+?)\s*\}\}/$1/g;     # remove link from {{URL|link|text}}
 
-        $template =~ s/\s*\{\{\s*dead link\s*(?:\|.*?)?\}\}//ig;        # remove {{Dead link|date=...}}
+        $template =~ s/\s*\{\{\s*dead link\s*(?:\|.*?)?\}\}//ig;        # remove {{dead link|date=...}}
+        $template =~ s/\s*\{\{\s*cbignore\s*(?:\|.*?)?\}\}//ig;         # remove {{cbignore|bot=...|}}
 
         $template =~ s/\{\{\s*abbr\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;       # remove {{abbr|text|...}}
         $template =~ s/\{\{\s*sup\s*\|([^\}]+)\}\}/$1/ig;               # remove {{sup|text}}
@@ -316,8 +317,11 @@ sub removeTemplates {
         $template =~ s/\{\{\s*interlanguage link(?: multi)?\s*\|([^\}\|]+).*?\}\}/$1/ig;          # remove {{interlanguage link|text|...}}
         $template =~ s/\{\{\s*link-interwiki\s*\|(?:[^e\|]*)\s*en\s*=\s*([^\}\|]+).*?\}\}/$1/ig;  # remove {{link-interwiki|en=text|...}}
 
+        $template =~ s/\{\{\s*iw2?\s*\|([^\}\|]+).*?\}\}/$1/ig;         # remove {{iw2|text|...}}
+
         $template =~ s/\{\{\s*lang\s*\|[^\|]+\|([^\}]+)\}\}/$1/ig;      # remove {{lang|ln|text}}
-        $template =~ s/\{\{\s*nihongo\s*\|([^\}\|]+)(?:\|.*?)?\}\}/$1/ig;    # remove {{nihongo|text|...}}
+        $template =~ s/\{\{\s*nihongo\s*\|([^\}\|]+)(?:\|.*?)?\}\}/$1/ig;       # remove {{nihongo|text|...}}
+        $template =~ s/\{\{\s*nihongo krt\s*\|([^\}\|]+)(?:\|.*?)?\}\}/$1/ig;   # remove {{nihongo krt|text|...}}
         $template =~ s/\{\{\s*nihongo\s*\|\|([^\\|}]+)\|.*?\}\}/$1/ig;  # remove {{nihongo||text|...}}
         $template =~ s/\{\{\s*zh\s*(?:\|[^\|]*)*\|l=([^\|\}]+)/$1/ig;   # remove {{zh|l=text}}
 
@@ -368,6 +372,7 @@ sub removeTemplates {
         $template =~ s/\{\{\s*colon\s*\}\}/:/ig;                        # replace {{colon}}
 
         $template =~ s/\{\{\s*bracket\s*\|([^\}]+)\}\}/\[$1\]/ig;       # replace {{bracket|text}}
+        $template =~ s/\{\{\s*interp\s*\|([^\}]+)\}\}/\[$1\]/ig;        # replace {{interp|text}}
 
         $template =~ s/,?\s*\{\{\s*ODNBsub\s*\}\}//ig;                  # remove {{ODNBsub}}
         $template =~ s/\s*\{\{\s*arxiv\s*\|[^\}]*\}\}//ig;              # remove {{arxiv}}
@@ -391,6 +396,8 @@ sub removeTemplates {
         $template =~ s/\{\{\s*noitalic\s*\|([^\}]+)\}\}/$1/ig;          # remove {{noitalic|text}}
         $template =~ s/\{\{\s*small\s*\|([^\}]+)\}\}/$1/ig;             # remove {{small|text}}
         $template =~ s/\{\{\s*smallcaps\s*\|([^\}]+)\}\}/$1/ig;         # remove {{smallcaps|text}}
+
+        $template =~ s/\{\{\s*gr[ae]y\s*\|([^\}]+)\}\}/$1/ig;           # remove {{gray|text}}
 
         $template =~ s/\{\{\s*lc:\s*([^\}]+)\}\}/\L$1/ig;               # remove {{lc:text}} where kept text is converted to lowercase
         $template =~ s/\{\{\s*uc:\s*([^\}]+)\}\}/\U$1/ig;               # remove {{uc:text}} where kept text is converted to uppercase
