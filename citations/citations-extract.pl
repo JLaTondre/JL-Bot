@@ -8,7 +8,9 @@ use strict;
 
 use Benchmark;
 use File::Basename;
+use File::ReadBackwards;
 use HTML::Entities;
+use POSIX;
 
 use lib dirname(__FILE__) . '/../modules';
 
@@ -51,6 +53,8 @@ my @INDEXES = (
     'CREATE INDEX indexPrefix ON dois(prefix)',
 );
 
+my $DOIDIRECTORY = $ENV{'WIKI_WORKING_DIR'} . '/Dois';
+
 #
 # Subroutines
 #
@@ -60,6 +64,7 @@ sub extractDoiField {
     # Extract the doi field from a citation template.
 
     my $citation = shift;
+    my $doiLimit = shift;
 
     $citation =~ s/<!--(?:(?!<!--).)*?-->//sg;               # remove comments
 
@@ -67,7 +72,7 @@ sub extractDoiField {
     # case there is more than one (since that is the one displayed)
 
     if ($citation =~ /.*\|\s*doi\s*=\s*(?:\(\(\s*)?(.*?)(?:\s*\)\))?\s*(?=\||\}\}$)/ig) {
-        return validateDoi($1);
+        return validateDoi($1, $doiLimit);
     }
 
     return;
@@ -78,6 +83,7 @@ sub extractDoiTemplate {
     # Extract the doi field from a doi template.
 
     my $template = shift;
+    my $doiLimit = shift;
 
     $template =~ s/<!--(?:(?!<!--).)*?-->//sg;               # remove comments
 
@@ -87,13 +93,13 @@ sub extractDoiTemplate {
     }
     elsif ($template =~ /^\{\{\s*(?:Template:)?\s*doi\s*\|\s*(.*?)\s*\}\}$/i) {
         # {{doi|number}}
-        my $result = validateDoi($1);
+        my $result = validateDoi($1, $doiLimit);
         $result->{'citation'} = 'NONE';
         return $result;
     }
     elsif ($template =~ /^\{\{\s*(?:Template:)?\s*doi-inline\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\}\}$/i) {
         # {{doi-inline|number|journal}}
-        my $result = validateDoi($1);
+        my $result = validateDoi($1, $doiLimit);
         my $citation = $2;
 
         $citation =~ s/&nbsp;\d.*$//;                       # remove trailing &nbsp;25.19 (1998): 3701-3704
@@ -106,7 +112,7 @@ sub extractDoiTemplate {
     }
     elsif ($template =~ /^\{\{\s*(?:Template:)?\s*doi-inline\s*\|\s*(.*?)\s*\}\}$/i) {
         # {{doi-inline|number}}
-        my $result = validateDoi($1);
+        my $result = validateDoi($1, $doiLimit);
         $result->{'citation'} = 'NONE';
         return $result;
     }
@@ -191,6 +197,35 @@ sub extractField {
     }
 
     return $results;
+}
+
+sub findDoiLimit {
+
+    # Find the maximum DOI number for invalid testing
+
+    print "  find DOI limit ...\n";
+
+    my $directory = shift;
+
+    my @files = glob($directory . '/doi-registrants-*');
+    my $latest = (reverse sort @files)[0];
+
+    my $file = File::ReadBackwards->new($latest)
+        or die "ERROR: Unable to open DOI file ($latest)\n --> $!\n\n";
+
+    my $line = $file->readline;
+
+    if ($line =~ /^(10.\d+).*$/) {
+        my $prefix = $1;
+        # cannot simply use ceil as want 10.55000 to also go to 10.56000
+        $prefix = $prefix * 100;
+        $prefix = $prefix + 1;
+        $prefix = floor($prefix);
+        $prefix = $prefix / 100;
+        return $prefix;
+    }
+
+    die "ERROR: Did not find a DOI prefix in $latest\n\n";
 }
 
 sub queryDisambiguatedTitles {
@@ -416,6 +451,7 @@ sub validateDoi {
     # Validates a doi and returns the prefix & value
 
     my $field = shift;
+    my $limit = shift;
 
     return if ($field =~ /^\s*$/);
     $field =~ s#^https?://(?:dx\.)?doi\.org/##;
@@ -429,7 +465,7 @@ sub validateDoi {
         if ($prefix < 10.1) {
             $result->{'prefix'} = 'INVALID';
         }
-        elsif (($prefix =~ /10\.\d{5}/) and ($prefix > 10.55)) {
+        elsif (($prefix =~ /10\.\d{5}/) and ($prefix > $limit)) {
             $result->{'prefix'} = 'INVALID';
         }
         else {
@@ -462,6 +498,10 @@ $| = 1;
 print "Extracting citations ...\n";
 
 my $b0 = Benchmark->new;
+
+# find DOI limit
+
+my $doiLimit = findDoiLimit($DOIDIRECTORY);
 
 # delete existing database & create new one
 
@@ -530,7 +570,7 @@ while (<INPUT>) {
 
         # process doi field
 
-        $extracted = extractDoiField($template);
+        $extracted = extractDoiField($template, $doiLimit);
         next unless ($extracted);
 
         my $prefix = $extracted->{'prefix'};
@@ -560,7 +600,7 @@ while (<INPUT>) {
         my $title    = $1;
         my $template = $2;
 
-        my $extracted = extractDoiTemplate($template);
+        my $extracted = extractDoiTemplate($template, $doiLimit);
         next unless ($extracted);
 
         $cCitations++;
