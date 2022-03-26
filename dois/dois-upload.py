@@ -32,9 +32,15 @@ def determinePage(doi):
     # Find page for a given suffix
 
     if len(doi) == 7:
-        page = doi[:4] + '000'
+        if doi[4] < '5':
+            page = doi[:4] + '000'
+        else:
+            page = doi[:4] + '500'
     elif len(doi) == 8:
-        page = doi[:5] + '000'
+        if doi[5] < '5':
+            page = doi[:5] + '000'
+        else:
+            page = doi[:5] + '500'
     else:
         sys.stderr.write('ERROR: unknown doi length: ' + doi + '\n')
         sys.exit(1)
