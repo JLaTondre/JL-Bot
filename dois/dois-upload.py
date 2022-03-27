@@ -32,18 +32,25 @@ def determinePage(doi):
     # Find page for a given suffix
 
     if len(doi) == 7:
-        if doi[4] < '5':
-            page = doi[:4] + '000'
-        else:
-            page = doi[:4] + '500'
+        start = 4
+        end = 6
     elif len(doi) == 8:
-        if doi[5] < '5':
-            page = doi[:5] + '000'
-        else:
-            page = doi[:5] + '500'
+        start = 5
+        end = 7
     else:
         sys.stderr.write('ERROR: unknown doi length: ' + doi + '\n')
         sys.exit(1)
+
+    value = doi[start:end]
+
+    if value < '25':
+        page = doi[:start] + '000'
+    elif value < '50':
+        page = doi[:start] + '250'
+    elif value < '75':
+        page = doi[:start] + '500'
+    else:
+        page = doi[:start] + '750'
 
     return page
 
@@ -174,10 +181,12 @@ def saveSummary(site, listing):
     print('Saving', page, '...')
 
     text = 'These pages are listing of Crossref registrants:\n'
+    text += '{{columns-list|\n'
     for doi in listing:
         text += '* [[User:JL-Bot/DOI/' + doi + '|' + doi + ']]\n'
 
     text += '* [[User:JL-Bot/DOI/Deltas|Deltas]]\n'
+    text += '}}\n'
 
     page = site.pages[page]
     page.save(text, 'DOI prefix registrant listing')
