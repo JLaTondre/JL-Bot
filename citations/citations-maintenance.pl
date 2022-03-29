@@ -328,6 +328,8 @@ sub retrieveMaintenance {
             my @terms = split(/\|/, $additional);
             for my $term (@terms) {
                 $term =~ s/^\d+\s*=\s*//;
+                $term =~ s/\{\{\(\(\}\}/{{/g;     # replace Template:((
+                $term =~ s/\{\{!\}\}/|/g;         # replace Template:!
                 if ($term =~ /\Q.*\E/) {
                     $maintenance->{$target}->{'include'}->{$term} = $exclusion;
                 }
