@@ -145,6 +145,8 @@ sub extractField {
 
     $citation =~ s/\{\{\s*subst:/{{/g;                       # remove subst:
 
+    $citation =~ s/\{\{\s*Q\s*\|([^\}]+)\}\}/==WIKIDATA==$1==WIKIDATA==/ig;     # keep {{Q|text}}
+
     $citation = removeTemplates($citation);
 
     my $results;
@@ -567,6 +569,8 @@ while (<INPUT>) {
                 print "      Title    = $title\n";
                 print "      Citation = $citation\n";
             }
+
+            $citation =~ s/==WIKIDATA==(.+)==WIKIDATA==/{{Q|$1}}/g;     # restore {{Q|text}}
 
             $citation = ucfirst $citation if ($citation =~ /^[a-z]/);
             $citation = updateCitation($citation, $type, $titles);
