@@ -286,7 +286,11 @@ sub getText {
     my $timestamp = $result->{'timestamp'};
     my $revision  = $result->{'revid'};
 
-    while ( (not exists $result->{'missing'}) and (not $text) ) {
+    # The following used to be a while, but that would cause an infinite loop on valid
+    # empty pages. Not sure why we had the loop so will change to one extra read in case
+    # there was a valid reason we could get no text when there should be.
+
+    if ( (not exists $result->{'missing'}) and (not $text) ) {
 
         # repeat attempt
 
