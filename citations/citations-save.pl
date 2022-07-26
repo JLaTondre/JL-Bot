@@ -959,6 +959,41 @@ sub saveMaintenance {
     return;
 }
 
+sub generateDiacritics {
+
+    # Generate diacritics results from database
+
+    my $database = shift;
+    my $row = shift;
+
+    my $sth = $database->prepare("
+        SELECT target, entries, articles, citations
+        FROM diacritics
+        WHERE citations > 0
+        ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
+    ");
+    $sth->execute();
+
+    my @results;
+    my $rank = 0;
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+
+        my $target = $ref->{'target'};
+        my $entries = $ref->{'entries'};
+        my $articles = $ref->{'articles'};
+        my $citations = $ref->{'citations'};
+
+        $rank++;
+
+        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
+
+        push @results, $line;
+    }
+
+    return \@results;
+}
+
 sub generateSpelling {
 
     # Generate spelling results from database
@@ -1268,6 +1303,11 @@ if ($saveMaintenance) {
 
     $records = generateSpelling($database, $row);
     saveMaintenance($bot, 'Misspellings', $top, "$bottom|$revision", $records);
+
+    # save diacritics
+
+    $records = generateDiacritics($database, $row);
+    saveMaintenance($bot, 'Diacritics', $top, "$bottom|$revision", $records);
 
     # save patterns
 
