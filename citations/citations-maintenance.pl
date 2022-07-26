@@ -50,11 +50,16 @@ my @TABLES = (
     'CREATE TABLE capitalizations(precedence INTEGER, target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE spellings(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE patterns(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE diacritics(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
 );
 
 my $CAPITALIZATIONS = 'Template:R from miscapitalisation';
 my $SPELLINGS = 'Template:R from misspelling';
+my @DIACRITICS = (
+    'Template:R to diacritic',
+    'Template:R from diacritic'
+);
 
 
 #
@@ -165,9 +170,9 @@ sub findCapitalizationTargets {
     return $results;
 }
 
-sub findSpellingTargets {
+sub findRedirectTargets {
 
-    # Finds the targets of the spelling redirects
+    # Finds the targets of redirects
 
     my $database = shift;
     my $typos    = shift;
@@ -179,7 +184,7 @@ sub findSpellingTargets {
 
     for my $typo (keys %$typos) {
         $current++;
-        print "  finding $current of $total spelling targets ...\r";
+        print "  finding $current of $total redirect targets ...\r";
         my $sth = $database->prepare('SELECT target FROM titles WHERE title = ?');
         $sth->bind_param(1, $typo);
         $sth->execute();
@@ -518,7 +523,7 @@ for my $type (keys %$results) {
 
 print "  retrieving transclusions of $SPELLINGS ...\n";
 $members = $bot->getTransclusions($SPELLINGS);
-$targets = findSpellingTargets($dbTitles, $members);
+$targets = findRedirectTargets($dbTitles, $members);
 
 $current = 0;
 $total = scalar keys %$targets;
@@ -665,6 +670,85 @@ for my $target (keys %$maintenance) {
             INSERT INTO patterns (target, entries, articles, citations)
             VALUES (?, ?, ?, ?)
         });
+        $sth->execute($target, $entries, $articles, $citations);
+
+    }
+
+}
+print "                                                 \r";
+
+# process diacritics
+
+$members = {};
+for my $category (sort @DIACRITICS) {
+    print "  retrieving transclusions of $category ...\n";
+    my $local = $bot->getTransclusions($category);
+    $members = { %$members, %$local };
+}
+$targets = findRedirectTargets($dbTitles, $members);
+
+$current = 0;
+$total = scalar keys %$targets;
+
+for my $target (keys %$targets) {
+
+    $current++;
+    print "  processing $current of $total diacritic targets ...\r";
+
+    my $results;
+
+    # process diacritics
+
+    for my $typo (keys %{$targets->{$target}}) {
+
+        my $normalization = normalizeCitation($typo);
+
+        my $sth = $dbMaintain->prepare('
+            SELECT citation
+            FROM normalizations
+            WHERE type = "journal"
+            AND normalization = ?
+        ');
+        $sth->bind_param(1, $normalization);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $citation = $ref->{'citation'};
+            my $type = pageType($dbTitles, $citation);
+            next unless (lc $typo eq lc $citation);
+            next unless (
+                ($type eq 'NONEXISTENT') or
+                (($type eq 'REDIRECT') and (exists $members->{$citation}))
+            );
+            my $sth = $dbMaintain->prepare('
+                SELECT dFormat, target, cCount, aCount
+                FROM individuals
+                WHERE type = "journal"
+                AND citation = ?
+            ');
+            $sth->bind_param(1, $citation);
+            $sth->execute();
+            while (my $ref = $sth->fetchrow_hashref()) {
+                $results->{$citation}->{'d-format'} = $ref->{'dFormat'};
+                $results->{$citation}->{'target'} = $ref->{'target'};
+                $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
+                $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+            }
+        }
+
+    }
+
+    # generate final data (que up transactions & commit at end)
+
+    if ($results) {
+
+        my $entries = formatTypoEntries($results);
+        my $articles = articleCount($dbMaintain, 'journal', $results);
+        my $citations = citationCount($results);
+
+        my $sth = $dbMaintain->prepare("
+            INSERT INTO diacritics (target, entries, articles, citations)
+            VALUES (?, ?, ?, ?)
+        ");
         $sth->execute($target, $entries, $articles, $citations);
 
     }
