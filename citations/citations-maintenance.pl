@@ -7,6 +7,7 @@ use strict;
 
 use Benchmark;
 use File::Basename;
+use Unicode::Normalize;
 
 use lib dirname(__FILE__) . '/../modules';
 
@@ -166,6 +167,45 @@ sub findCapitalizationTargets {
     }
 
     print "                                                 \r";
+
+    return $results;
+}
+
+sub findCitations {
+
+    # Finds citations without articles that have diacritics
+
+    my $database = shift;
+    my $type = shift;
+
+    print "  finding " . $type . " citations ...                \r";
+
+    my $sql = '
+        SELECT citation
+        FROM individuals
+        WHERE type = "journal"
+    ';
+
+    if ($type eq 'existent') {
+        $sql .= 'AND dFormat != "nonexistent"'
+    }
+    elsif ($type eq 'nonexistent') {
+        $sql .= 'AND dFormat = "nonexistent"'
+    }
+    else {
+        die "\n\nERROR: findCitations should not reach here!\n\n";
+    }
+
+    my $results;
+
+    my $sth = $database->prepare($sql);
+    $sth->execute();
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $citation = $ref->{'citation'};
+        my $term = NFKD($citation);
+        $term =~ s/\p{NonspacingMark}//g;
+        $results->{$term}->{$citation} = 1;
+    }
 
     return $results;
 }
@@ -677,7 +717,7 @@ for my $target (keys %$maintenance) {
 }
 print "                                                 \r";
 
-# process diacritics
+# process diacritics based on templates
 
 $members = {};
 for my $category (sort @DIACRITICS) {
@@ -753,6 +793,75 @@ for my $target (keys %$targets) {
 
     }
 
+}
+print "                                                 \r";
+
+# process diacritics based on red links
+
+my $blueLinks = findCitations($dbMaintain, "existent");
+my $redLinks = findCitations($dbMaintain, "nonexistent");
+
+$current = 0;
+$total = scalar keys %$blueLinks;
+
+for my $nonDiacritic (keys %$blueLinks) {
+
+    $current++;
+    print "  processing $current of $total blue links ...\r";
+
+    if (exists $redLinks->{$nonDiacritic}) {
+
+        my $results;
+
+        # if multiple blue links, arbitrarily use first
+
+        my @blues = sort keys %{$blueLinks->{$nonDiacritic}};
+        my $first = $blues[0];
+
+        next if (exists $targets->{$first}); # skipping as already seen via redirects
+
+        # check red links
+
+        for my $red (keys %{$redLinks->{$nonDiacritic}}) {
+
+            if (($first ne $nonDiacritic) or ($red ne $nonDiacritic)) {
+
+                my $sth = $dbMaintain->prepare('
+                    SELECT dFormat, target, cCount, aCount
+                    FROM individuals
+                    WHERE type = "journal"
+                    AND citation = ?
+                ');
+                $sth->bind_param(1, $red);
+                $sth->execute();
+                while (my $ref = $sth->fetchrow_hashref()) {
+                    $results->{$red}->{'d-format'} = $ref->{'dFormat'};
+                    $results->{$red}->{'target'} = $ref->{'target'};
+                    $results->{$red}->{'citation-count'} = $ref->{'cCount'};
+                    $results->{$red}->{'article-count'} = $ref->{'aCount'};
+                }
+
+            }
+
+        }
+
+        # generate final data (que up transactions & commit at end)
+
+        if ($results) {
+
+            my $entries = formatTypoEntries($results);
+            my $articles = articleCount($dbMaintain, 'journal', $results);
+            my $citations = citationCount($results);
+
+            my $sth = $dbMaintain->prepare("
+                INSERT INTO diacritics (target, entries, articles, citations)
+                VALUES (?, ?, ?, ?)
+            ");
+            $sth->execute($first, $entries, $articles, $citations);
+
+        }
+
+    }
 }
 print "                                                 \r";
 
