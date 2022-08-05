@@ -217,6 +217,7 @@ else
     fi
 
     # check maintenance (configuration only)
+    # while maintenance runs each time still need to check in case it is only config that changed
 
     CFGCURRENT=$(getCurrentRevision 'INCLUDE' ${CONFIGMAIN[@]})
     CFGHISTORY=$(getHistoryRevision db-maintenance.sqlite3 maintenance)
@@ -254,13 +255,8 @@ else
             $DIRECTORY/citations-save.pl -p
         fi
 
-        if [ "$MAINTENANCE" -gt 0 ]
-        then
-            $DIRECTORY/citations-maintenance.pl
-            $DIRECTORY/citations-save.pl -m
-        fi
-
-        $DIRECTORY/citations-save.pl -f
+        $DIRECTORY/citations-maintenance.pl
+        $DIRECTORY/citations-save.pl -mf
         $DIRECTORY/citations-doi.pl
     else
         echo "Citations processing not required"
