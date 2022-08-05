@@ -56,7 +56,10 @@ my @TABLES = (
 );
 
 my $CAPITALIZATIONS = 'Template:R from miscapitalisation';
-my $SPELLINGS = 'Template:R from misspelling';
+my @SPELLINGS = (
+    'Template:R from misspelling',
+    'Template:R from incorrect name'
+);
 my @DIACRITICS = (
     'Template:R to diacritic',
     'Template:R from diacritic'
@@ -561,8 +564,12 @@ for my $type (keys %$results) {
 
 # process spellings
 
-print "  retrieving transclusions of $SPELLINGS ...\n";
-$members = $bot->getTransclusions($SPELLINGS);
+$members = {};
+for my $category (@SPELLINGS) {
+    print "  retrieving transclusions of $category ...\n";
+    my $local = $bot->getTransclusions($category);
+    $members = { %$members, %$local };
+}
 $targets = findRedirectTargets($dbTitles, $members);
 
 $current = 0;
@@ -720,7 +727,7 @@ print "                                                 \r";
 # process diacritics based on templates
 
 $members = {};
-for my $category (sort @DIACRITICS) {
+for my $category (@DIACRITICS) {
     print "  retrieving transclusions of $category ...\n";
     my $local = $bot->getTransclusions($category);
     $members = { %$members, %$local };
