@@ -1305,17 +1305,9 @@ for my $update (sort keys %$toUpdate) {
 
     for my $type (@$types) {
 
-        print "  $type ... ";
-
-        my $dbtotal = scalar keys %$members;
-        my $dbtotalLen = length($dbtotal);
-
-        my $dbcount = 0;
-        my $dbcountLen = 0;
+        print "  $type ...\n";
 
         for my $talk (keys %$members) {
-
-            $dbcount++;
 
             $talk =~ s/^File talk:/File:/;            # files are in category by main name, not talk
 
@@ -1347,11 +1339,6 @@ for my $update (sort keys %$toUpdate) {
                 if ($type eq 'content-former-featured-topics') {
                     next if ((exists $retrieved->{'content-featured-topics'}) and (exists $retrieved->{'content-featured-topics'}->{$talk}));
                 }
-
-                print "$dbcount of $dbtotal";
-
-                $dbcountLen = length($dbcount);
-                print "\b" x ($dbcountLen + $dbtotalLen + 4);
 
                 # find non-talk page name
 
@@ -1385,9 +1372,6 @@ for my $update (sort keys %$toUpdate) {
             }
 
         }
-
-        print " " x ($dbcountLen + $dbtotalLen + 4);
-        print "\n";
 
     }
 
