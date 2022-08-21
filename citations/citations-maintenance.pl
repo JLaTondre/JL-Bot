@@ -55,14 +55,14 @@ my @TABLES = (
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
 );
 
-my $CAPITALIZATIONS = 'Template:R from miscapitalisation';
+my $CAPITALIZATIONS = 'Category:Redirects from miscapitalisations';
 my @SPELLINGS = (
-    'Template:R from misspelling',
-    'Template:R from incorrect name'
+    'Category:Redirects from misspellings',
+    'Category:Redirects from incorrect names'
 );
 my @DIACRITICS = (
-    'Template:R to diacritic',
-    'Template:R from diacritic'
+    'Category:Redirects from titles without diacritics',
+    'Category:Redirects from titles with diacritics'
 );
 
 
@@ -443,8 +443,8 @@ $dbMaintain->commit;
 
 my $bot = mybot->new($BOTINFO);
 
-print "  retrieving transclusions of $CAPITALIZATIONS ...\n";
-my $members = $bot->getTransclusions($CAPITALIZATIONS);
+print "  retrieving members of $CAPITALIZATIONS ...\n";
+my $members = $bot->getCategoryMembers($CAPITALIZATIONS);
 my $targets = findCapitalizationTargets($dbMaintain);
 
 my $current = 0;
@@ -566,8 +566,8 @@ for my $type (keys %$results) {
 
 $members = {};
 for my $category (@SPELLINGS) {
-    print "  retrieving transclusions of $category ...\n";
-    my $local = $bot->getTransclusions($category);
+    print "  retrieving members of $category ...\n";
+    my $local = $bot->getCategoryMembers($category);
     $members = { %$members, %$local };
 }
 $targets = findRedirectTargets($dbTitles, $members);
@@ -728,8 +728,8 @@ print "                                                 \r";
 
 $members = {};
 for my $category (@DIACRITICS) {
-    print "  retrieving transclusions of $category ...\n";
-    my $local = $bot->getTransclusions($category);
+    print "  retrieving members of $category ...\n";
+    my $local = $bot->getCategoryMembers($category);
     $members = { %$members, %$local };
 }
 $targets = findRedirectTargets($dbTitles, $members);
