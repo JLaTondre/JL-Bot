@@ -150,7 +150,7 @@ sub findCapitalizationTargets {
 
     my $database = shift;
 
-    print "  finding capitalization targets ...\r";
+    print "  finding capitalization targets ...\n";
 
     my $results;
 
@@ -169,8 +169,6 @@ sub findCapitalizationTargets {
         $results->{$target}->{$citation} = 1;
     }
 
-    print "                                                 \r";
-
     return $results;
 }
 
@@ -181,7 +179,7 @@ sub findCitations {
     my $database = shift;
     my $type = shift;
 
-    print "  finding " . $type . " citations ...                \r";
+    print "  finding " . $type . " citations ...\n";
 
     my $sql = '
         SELECT citation
@@ -220,14 +218,12 @@ sub findRedirectTargets {
     my $database = shift;
     my $typos    = shift;
 
-    my $current = 0;
     my $total = scalar keys %$typos;
+    print "  finding $total redirect targets ...\n";
 
     my $results;
 
     for my $typo (keys %$typos) {
-        $current++;
-        print "  finding $current of $total redirect targets ...\r";
         my $sth = $database->prepare('SELECT target FROM titles WHERE title = ?');
         $sth->bind_param(1, $typo);
         $sth->execute();
@@ -236,8 +232,6 @@ sub findRedirectTargets {
             $results->{$target}->{$typo} = 1;
         }
     }
-
-    print "                                                 \r";
 
     return $results;
 }
@@ -447,13 +441,10 @@ print "  retrieving members of $CAPITALIZATIONS ...\n";
 my $members = $bot->getCategoryMembers($CAPITALIZATIONS);
 my $targets = findCapitalizationTargets($dbMaintain);
 
-my $current = 0;
 my $total = scalar keys %$targets;
+print "  processing $total capitalization targets ...\n";
 
 for my $target (keys %$targets) {
-
-    $current++;
-    print "  processing $current of $total capitalization targets ...\r";
 
     my $results;
 
@@ -518,11 +509,10 @@ for my $target (keys %$targets) {
     }
 
 }
-print "                                                 \r";
 
 # process all capital non-existent targets
 
-print "  processing non-existent targets ...\r";
+print "  processing non-existent targets ...\n";
 
 my $results;
 
@@ -544,7 +534,6 @@ while (my $ref = $sth->fetchrow_hashref()) {
         $results->{$type}->{$citation}->{'article-count'} = $ref->{'aCount'};
     }
 }
-print "                                                 \r";
 
 for my $type (keys %$results) {
 
@@ -572,13 +561,10 @@ for my $category (@SPELLINGS) {
 }
 $targets = findRedirectTargets($dbTitles, $members);
 
-$current = 0;
 $total = scalar keys %$targets;
+print "  processing $total spelling targets ...\n";
 
 for my $target (keys %$targets) {
-
-    $current++;
-    print "  processing $current of $total spelling targets ...\r";
 
     my $results;
 
@@ -639,17 +625,13 @@ for my $target (keys %$targets) {
     }
 
 }
-print "                                                 \r";
 
 # process patterns
 
-$current = 0;
 $total = scalar keys %$maintenance;
+print "  processing $total patterns ...\n";
 
 for my $target (keys %$maintenance) {
-
-    $current++;
-    print "  processing $current of $total patterns ...\r";
 
     my $results;
     my $counts;
@@ -722,7 +704,6 @@ for my $target (keys %$maintenance) {
     }
 
 }
-print "                                                 \r";
 
 # process diacritics based on templates
 
@@ -734,13 +715,10 @@ for my $category (@DIACRITICS) {
 }
 $targets = findRedirectTargets($dbTitles, $members);
 
-$current = 0;
 $total = scalar keys %$targets;
+print "  processing $total diacritic targets ...\n";
 
 for my $target (keys %$targets) {
-
-    $current++;
-    print "  processing $current of $total diacritic targets ...\r";
 
     my $results;
 
@@ -801,20 +779,16 @@ for my $target (keys %$targets) {
     }
 
 }
-print "                                                 \r";
 
 # process diacritics based on red links
 
 my $blueLinks = findCitations($dbMaintain, "existent");
 my $redLinks = findCitations($dbMaintain, "nonexistent");
 
-$current = 0;
 $total = scalar keys %$blueLinks;
+print "  processing $total blue links ...\n";
 
 for my $nonDiacritic (keys %$blueLinks) {
-
-    $current++;
-    print "  processing $current of $total blue links ...\r";
 
     if (exists $redLinks->{$nonDiacritic}) {
 
@@ -870,7 +844,6 @@ for my $nonDiacritic (keys %$blueLinks) {
 
     }
 }
-print "                                                 \r";
 
 $dbMaintain->commit;
 $dbMaintain->disconnect;
