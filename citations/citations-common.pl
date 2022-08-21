@@ -69,7 +69,6 @@ my @TABLES = (
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
 );
 
-my $BLOCK = 100;   # status size
 
 #
 # Subroutines
