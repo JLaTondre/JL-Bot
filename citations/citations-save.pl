@@ -761,7 +761,7 @@ sub savePages {
 
             $output .= $defaultsort;
 
-            print "  saving $type $letter$pCurrent ...           \r";
+            print "  saving $type $letter$pCurrent ...\n";
 
             # save main page
 
@@ -815,7 +815,7 @@ sub saveInvalid {
     my $bottom = shift;
     my $records = shift;
 
-    print "  saving $type Invalid ...           \r";
+    print "  saving $type Invalid ...\n";
 
     my $output  = "{{$MAIN{$type}|letter=Invalid}}\n";
     $output .= "{|class=wikitable\n|-\n!Target\n!Entries (Citations, Articles)\n!Total Citations\n";
@@ -937,7 +937,7 @@ sub saveMaintenance {
     my $bottom = shift;
     my $records = shift;
 
-    print "  saving $name ...           \r";
+    print "  saving $name ...\n";
 
     my $type = 'journal';
 
@@ -1380,7 +1380,3 @@ if ($saveFPCounts) {
 
     $bot->saveText($FALSEPOSITIVES, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
 }
-
-# clean-up
-
-print "                                 \r";

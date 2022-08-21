@@ -136,7 +136,7 @@ then
 
     echo "Downloading $DOWNLOAD dump ..."
 
-    wget https://dumps.wikimedia.org/enwiki/${DOWNLOAD}/enwiki-${DOWNLOAD}-pages-articles.xml.bz2
+    wget -nv https://dumps.wikimedia.org/enwiki/${DOWNLOAD}/enwiki-${DOWNLOAD}-pages-articles.xml.bz2
 
     mv Citations Citations-${LATEST}-${TIMESTAMP}
     mkdir Citations
