@@ -69,7 +69,6 @@ my @TABLES = (
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
 );
 
-my $BLOCK = 100;   # status size
 
 #
 # Subroutines
@@ -398,15 +397,10 @@ for my $type (@TYPES) {
 
     # process normalizations
 
-    my $current = 0;
     my $total = scalar keys %$normalizations;
+    print "  processing $total normalizations ...\n";
 
-    print "  processing normalizations ...\r";
     for my $normalization (keys %$normalizations) {
-        $current++;
-        if (($current % $BLOCK) == 0) {
-            print "  processing normalizations $current of $total ...\r";
-        }
         next if ($normalization eq '--');
         my $candidates = findNormalizations($dbCommon, $type, $normalization);
         for my $candidate (keys %$candidates) {
@@ -414,7 +408,6 @@ for my $type (@TYPES) {
             $normalizations->{$normalization}->{$candidate} = $result if ($result);
         }
     }
-    print "  processing normalizations ...                                  \n";
 
     # put it together
 

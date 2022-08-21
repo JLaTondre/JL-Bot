@@ -408,15 +408,12 @@ $dbTitles->openDatabase($DBTITLES);
 
 # process dois
 
-my $current = 0;
 my $total = scalar keys %$dois;
+print "  processing $total dois ...\n";
 
 my $results;
 
 for my $prefix (sort sortPrefixes keys %$dois) {
-
-    $current++;
-    print "  processing $current of $total ...\r";
 
     my $aCount = scalar keys %{$dois->{$prefix}->{'articles'}};
     my $cCount = $dois->{$prefix}->{'count'};
@@ -537,7 +534,7 @@ else {
 
             # save
 
-            print "  saving $current ...                  \r";
+            print "  saving $current ...\n";
             saveOutput($current, $output, $bot);
 
             # get ready for next page
@@ -555,10 +552,9 @@ else {
     # add bottom of page & save for last one (which would be Invalid)
     $output .= "{{JCW-bottom|date=$date|type=no|legend=no}}\n";
     $output .= "{{DEFAULTSORT:* Invalid DOI prefixes}}\n" ;
-    print "  saving $current ...                  \r";
+    print "  saving $current ...\n";
     saveOutput($current, $output, $bot);
 }
-print "                                 \r";
 
 my $b1 = Benchmark->new;
 my $bd = timediff($b1, $b0);

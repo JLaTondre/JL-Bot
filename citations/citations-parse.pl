@@ -504,7 +504,7 @@ my %opts;
 getopts('ht', \%opts);
 
 if ($opts{h}) {
-    print "usage: citations-1-parse.pl [-h] <file>\n";
+    print "usage: citations-parse.pl [-h] <file>\n";
     print "       where: -h = help\n";
     exit;
 }
@@ -599,7 +599,6 @@ while (my ($title, $text) = $pages->next) {
     $cTitles++;
 
     if (($cTitles % $BLOCK) == 0) {
-        print '  count = ' .  format_number($cTitles) . "\r";
         saveTitles($database, $titles);
         $titles = {};
     }
