@@ -58,7 +58,8 @@ my @TABLES = (
 my $CAPITALIZATIONS = 'Category:Redirects from miscapitalisations';
 my @SPELLINGS = (
     'Category:Redirects from misspellings',
-    'Category:Redirects from incorrect names'
+    'Category:Redirects from incorrect names',
+    'Category:Redirects from database entries'
 );
 my @DIACRITICS = (
     'Category:Redirects from titles without diacritics',
