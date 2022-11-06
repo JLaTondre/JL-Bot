@@ -1406,8 +1406,8 @@ for my $update (sort keys %$toUpdate) {
 
                 $output .= "<small>\n" if (($small) and ($compact));
                 if ( ($columns) and (not $compact) ) {
-                    $output .= "\{\{columns-list|colwidth=30em|\n" if ($columns =~ /^\d+$/);        # default to three columns for deprecated parameter
-                    $output .= "\{\{columns-list|colwidth=$columns|\n" if ($columns =~ /^\d+em$/);
+                    $output .= "<div style='column-width: 30em;'>\n" if ($columns =~ /^\d+$/);        # default to three columns for deprecated parameter
+                    $output .= "<div style='column-width: $columns;'>\n" if ($columns =~ /^\d+em$/);
                 }
 
                 # determine sort order
@@ -1534,7 +1534,7 @@ for my $update (sort keys %$toUpdate) {
                     $output .= "\n";
                 }
 
-                $output .= "}}\n" if ( ($columns) and (not $compact) );
+                $output .= "</div>\n" if ( ($columns) and (not $compact) );
                 $output .= "</small>\n" if (($small) and ($compact));
                 $output .= "Total pages in content type is $total\n" if (($displayTotal) and (not (($compact) and ($maximum))));
 
