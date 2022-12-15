@@ -1561,6 +1561,7 @@ for my $update (sort keys %$toUpdate) {
                     $output .= "$page";
                     unless ($noCaptions) {
                         my $caption = $page =~ s/^File:(.+?)(?:\.(?:tiff|tif|png|gif|jpg|jpeg|webp|xcf|pdf|mid|ogg|ogv|svg|djvu|oga|flac|opus|wav|webm|mp3|midi|mpg|mpeg))?$/$1/ir;
+                        $caption =~ s/(px)$/$1\{\{sp\}\}/i;     # 140 : avoid lint errors with captions ending in px
                         $output .= "|$caption";
                     }
                     if (($dates) and (exists $dateTypes{$type})) {
