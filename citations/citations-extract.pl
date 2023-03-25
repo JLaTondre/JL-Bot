@@ -361,7 +361,7 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*ECCC\s*\|.*?\|\s*(\d+)\s*\|\s*(\d+)\s*\}\}/ECCC TR$1-$2/ig;  # remove {{ECCC|no|num|num}}
 
-        $template =~ s/\{\{\s*(?:en |n)dash\s*\}\}/–/ig;                # replace {{en dash}}
+        $template =~ s/\{\{\s*(?:en |en|en-|n)dash\s*\}\}/–/ig;         # replace {{en dash}}
         $template =~ s/\{\{\s*spaced (?:en |n)dash\s*\}\}/ – /ig;       # replace {{spaced en dash}}
         $template =~ s/\{\{\s*snd\s*\}\}/ – /ig;                        # replace {{snd}}
 
@@ -372,6 +372,8 @@ sub removeTemplates {
         $template =~ s/\{\{\s*'\s*\}\}/'/ig;                            # replace {{'}}
         $template =~ s/\{\{\s*=\s*\}\}/=/ig;                            # replace {{=}}
         $template =~ s/\{\{\s*colon\s*\}\}/:/ig;                        # replace {{colon}}
+        $template =~ s/\{\{\s*!\(\s*\}\}/\[/ig;                         # replace {{!(}}
+        $template =~ s/\{\{\s*\)!\s*\}\}/\]/ig;                         # replace {{)!}}
 
         $template =~ s/\{\{\s*bracket\s*\|([^\}]+)\}\}/\[$1\]/ig;       # replace {{bracket|text}}
         $template =~ s/\{\{\s*interp\s*\|([^\}]+)\}\}/\[$1\]/ig;        # replace {{interp|text}}
@@ -384,6 +386,8 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*subscription needed\s*(?:\|.*?)?\}\}//ig;    # remove {{subscription needed|remove}}
         $template =~ s/\s*\{\{\s*subscription required\s*(?:\|.*?)?\}\}//ig;  # remove {{subscription required|remove}}
         $template =~ s/\s*\{\{\s*subscription\s*(?:\|.*?)?\}\}//ig;           # remove {{subscription|remove}}
+
+        $template =~ s/\s*\{\{\s*unreliable source(?: inline)?\s*(?:\|.*?)?\}\}//ig;   # remove {{unreliable source|remove}}
 
         $template =~ s/\{\{\s*HighBeam\s*\}\}//ig;                      # remove {{HighBeam}}
 
@@ -410,6 +414,7 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*void\s*\|([^\}]+)\}\}//ig;             # remove {{void|remove}}
 
         $template =~ s/\{\{\s*chem\s*\|\s*CO\s*\|\s*2\s*\}\}/CO2/ig;    # replace {{chem|CO|2}}
+        $template =~ s/\s*\{\{\s*CO2\s*(?:\|.*?)?\}\}/CO2/ig;           # replace {{CO2|...}}
 
         $template =~ s/\{\{\s*w\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;          # remove {{w|text|...}}
         $template =~ s/\{\{\s*w\s*\|([^\}]+)\}\}/$1/ig;                 # remove {{w|text}}
