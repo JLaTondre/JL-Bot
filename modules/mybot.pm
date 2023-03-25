@@ -216,10 +216,71 @@ sub getCategoryMembers {
     return $members;
 }
 
+sub getCategoryMembersWithRevId {
+
+    # This subroutine gets the members of a category along with the page revision id.
+    # It is passed the category to be processed and an optional namespace filter.
+
+    my $self       = shift;
+    my $category   = shift;
+    my $namespaces = shift;
+
+    unless ($category) {
+        croak "\nMyBot->getCategoryMembersWithRevId: Category not specified!";
+    }
+
+    unless ($namespaces) {
+        $namespaces = '0';
+    }
+
+    if ($namespaces eq "ALL") {
+        $namespaces = $_allnamespaces;
+    }
+
+    my $members;
+    my $continue = 0;
+
+    do {
+
+        my $options = {
+            action       => 'query',
+            generator    => 'categorymembers',
+            gcmtitle     => $category,
+            gcmnamespace => $namespaces,
+            gcmlimit     => 'max',
+            prop         => 'info'
+        };
+
+        if ($continue) {
+            $options->{gcmcontinue} = $continue;
+        }
+
+        my $results = _api($self, "MyBot->getCategoryMembersWithRevId", $options);
+
+        if (exists $results->{'query'}->{'pages'}) {
+            for my $result (keys %{$results->{'query'}->{'pages'}} ) {
+                my $title = $results->{'query'}->{'pages'}->{$result}->{title};
+                my $revid = $results->{'query'}->{'pages'}->{$result}->{lastrevid};
+                $members->{ $title } = $revid;
+            }
+        }
+
+        if (exists $results->{'continue'}->{'gcmcontinue'}) {
+            $continue = $results->{'continue'}->{'gcmcontinue'};
+        }
+        else {
+            $continue = 0;
+        }
+
+    } while ($continue);
+
+    return $members;
+}
+
 sub getBacklinks {
 
     # This subroutine gets the backlinks to a page.  It is passed the page to
-    # process and two optional arguements: a binary flag for including backlinks
+    # process and two optional arguments: a binary flag for including backlinks
     # via redirects and a namespace filter.
 
     my $self       = shift;
@@ -439,6 +500,83 @@ sub getTransclusions {
         for my $result ( @$results ) {
             $embedded->{ $result->{title} } = 1;
         }
+
+    }
+
+    return $embedded;
+}
+
+sub getTransclusionsWithRevId {
+
+    # This subroutine gets the transclusions of a page along with the page revision id.
+    # It is passed the page to be processed and an optional namespace filter.
+
+    my $self       = shift;
+    my $page       = shift;
+    my $namespaces = shift;
+
+    unless ($page) {
+        croak "\nMyBot->getTransclusionsWithRevId: Page not specified!";
+    }
+
+    unless ($namespaces) {
+        $namespaces = '0';
+    }
+
+    if ($namespaces eq "ALL") {
+        $namespaces = $_allnamespaces;
+    }
+
+    # also process redirects if this is a template
+
+    my $retrieve;
+
+    if ($page =~ /^Template:/) {
+        $retrieve = $self->getRedirects($page, 10);
+    }
+
+    $retrieve->{$page} = 1;
+
+    # retrieve transclusions
+
+    my $embedded;
+    my $continue = 0;
+
+    for my $transcluded (sort keys %$retrieve) {
+
+        do {
+
+            my $options = {
+                action       => 'query',
+                generator    => 'embeddedin',
+                geititle     => $transcluded,
+                geinamespace => $namespaces,
+                geilimit     => 'max',
+                prop         => 'info'
+            };
+
+            if ($continue) {
+                $options->{geicontinue} = $continue;
+            }
+
+            my $results = _api($self, "MyBot->getTransclusionsWithRevId", $options);
+
+            if (exists $results->{'query'}->{'pages'}) {
+                for my $result (keys %{$results->{'query'}->{'pages'}} ) {
+                    my $title = $results->{'query'}->{'pages'}->{$result}->{title};
+                    my $revid = $results->{'query'}->{'pages'}->{$result}->{lastrevid};
+                    $embedded->{ $title } = $revid;
+                }
+            }
+
+            if (exists $results->{'continue'}->{'geicontinue'}) {
+                $continue = $results->{'continue'}->{'geicontinue'};
+            }
+            else {
+                $continue = 0;
+            }
+
+        } while ($continue);
 
     }
 
