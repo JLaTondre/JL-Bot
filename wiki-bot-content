@@ -258,9 +258,6 @@ sub getPageInfo {
             $info = thaw(decode_base64($frozen));
             return $info;
         }
-        else {
-            print("DEBUG: $page --> $revid = $last = DOES NOT MATCH SO GRABBING NEW\n");
-        }
     }
 
     # retrieve new version
@@ -1016,7 +1013,7 @@ sub parseMainPageNews {
         }
 
     }
-    elsif ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*itndate\s*=\s*(?:\[\[\s*)?([\w\d\s,]+)/ims) {
+    elsif ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*itn1?date\s*=\s*(?:\[\[\s*)?([\w\d\s,]+)/ims) {
         my $date = $1;
 
         if ($date) {
