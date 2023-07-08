@@ -39,7 +39,9 @@ my $BOTINFO = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
 my $CATEGORY = 'Category:Redirects from DOI prefixes';
 
 my @PUBLISHER = (
-    'User:JL-Bot/Publishers.cfg'
+    'User:JL-Bot/Publishers.cfg/A–M',
+    'User:JL-Bot/Publishers.cfg/N–Z',
+    'User:JL-Bot/Publishers.cfg/Others'
 );
 my @QUESTIONABLE = (
     'User:JL-Bot/Questionable.cfg/General',
