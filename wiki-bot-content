@@ -774,13 +774,13 @@ sub parseArticleHistory {
                 $blurb =~ s/\|\s*dyk\d*date\s*=.*//;
                 $blurb =~ s/\|\s*dykimage\s*=.*//;
                 $blurb =~ s/\|\s*dyklink\s*=.*//;
-                $blurb =~ s/\|\s*dyknom\s*=.*//;
+                $blurb =~ s/\|\s*dyk\d?nom\s*=.*//;
                 $blurb =~ s/\|\s*dykviews\s*=.*//;
                 $blurb =~ s/\|\s*four\s*=.*//;
                 $blurb =~ s/\|\s*ftname\s*=.*//;
                 $blurb =~ s/\|\s*image\s*=.*//;
                 $blurb =~ s/\|\s*itndate\s*=.*//;
-                $blurb =~ s/\|\s*maindate\s*=.*//;
+                $blurb =~ s/\|\s*maindate\d?\s*=.*//;
                 $blurb =~ s/\|\s*nompage\s*=.*//;
                 $blurb =~ s/\|\s*otd\d?date\s*=.*//;
                 $blurb =~ s/\|\s*small\s*=.*//;
@@ -907,6 +907,7 @@ sub parseDYKTalk {
             $template =~ s/\|\s*SIART\s*=.*?(?=[\|\}])//;
             $template =~ s/\|\s*SIART-importance\s*=.*?(?=[\|\}])//;
             $template =~ s/\|\s*views\s*=.*?(?=[\|\}])//;
+            $template =~ s/\s*\|+\s*}}/}}/;
 
             # extract date
 
