@@ -6,7 +6,7 @@ DIRECTORY=$LOCATION/citations
 BOT='JL-Bot'
 
 CONFIGFALSE=( 'User:JL-Bot/Citations.cfg' )
-CONFIGPUBS=( 'User:JL-Bot/Publishers.cfg' )
+CONFIGPUBS=( 'User:JL-Bot/Publishers.cfg/A–M' 'User:JL-Bot/Publishers.cfg/N–Z' 'User:JL-Bot/Publishers.cfg/Others' )
 CONFIGQUESTION=( 'User:JL-Bot/Questionable.cfg/General' 'User:JL-Bot/Questionable.cfg/Publishers' 'User:JL-Bot/Questionable.cfg/Journals' )
 CONFIGMAIN=( 'User:JL-Bot/Maintenance.cfg' )
 
