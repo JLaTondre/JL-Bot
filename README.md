@@ -5,7 +5,7 @@ https://en.wikipedia.org/wiki/User:JL-Bot
 
 The bot is primarily implemented using Perl, but some new tasks use Python.
 
-The repository contains all of the custom code associated with the bot. The scripts utilize a number of standard packages, but all of these can be found via normal package managers. The Citations tasks also requires sqlite3.
+The repository contains all of the custom code associated with the bot. The scripts utilize a number of standard packages, but all of these can be found via normal package managers. The Citations and Content tasks also require sqlite3.
 
 The scripts require two configuration variables to be set:
 * WIKI_CONFIG_DIR = location of configuration files

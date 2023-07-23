@@ -293,8 +293,16 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*req\s*\|([^\}]+)\}\}/$1/ig;               # remove {{req|text}}
 
-        $template =~ s/\{\{\s*not a typo\s*\|([^\|]+)\|([^\}]+)\}\}/$1 $2/ig;  # remove {{not a typo|text|text}}
+        $template =~ s/\{\{\s*not a typo\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;   # remove {{not a typo|text|text}}
         $template =~ s/\{\{\s*not a typo\s*\|([^\}]+)\}\}/$1/ig;               # remove {{not a typo|text}}
+
+        $template =~ s/\{\{\s*as written\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;   # remove {{as written|text|text}}
+        $template =~ s/\{\{\s*as written\s*\|([^\}]+)\}\}/$1/ig;               # remove {{as written|text}}
+
+        $template =~ s/\{\{\s*text\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;         # remove {{text|text|text}}
+        $template =~ s/\{\{\s*text\s*\|([^\}]+)\}\}/$1/ig;                     # remove {{text|text}}
+
+        $template =~ s/\{\{\s*convert\s*\|([^\|]+)\|([^\|]+)(?:\|.+)?\}\}/$1 $2/ig;    # convert {{not a typo|text|text|remove}}
 
         $template =~ s/\s*\{\{\s*sic\s*(?:\|.*?)?\}\}//ig;              # remove {{sic|remove}}
 
@@ -307,8 +315,8 @@ sub removeTemplates {
         $template =~ s/\{\{\s*asiantitle\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;          # remove {{asiantitle|no|text|...}}
         $template =~ s/\{\{\s*asiantitle\s*\|([^\}\|]+).*?\}\}/$1/ig;                  # remove {{asiantitle|text|...}}
 
-        $template =~ s/\{\{\s*transl\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;      # remove {{transl|no|no|text|...}}
-        $template =~ s/\{\{\s*transl\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;              # remove {{transl|no|text|...}}
+        $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;   # remove {{transl|no|no|text|...}}
+        $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;           # remove {{transl|no|text|...}}
 
         $template =~ s/\{\{\s*illm?\s*\|[^\}\|]+\{\{\s*!\s*\}\}\s*([^\}\|]+).*?\}\}/$1/ig;        # remove {{ill|remove{{!}}text|...}}
 
@@ -326,6 +334,8 @@ sub removeTemplates {
         $template =~ s/\{\{\s*nihongo krt\s*\|([^\}\|]+)(?:\|.*?)?\}\}/$1/ig;   # remove {{nihongo krt|text|...}}
         $template =~ s/\{\{\s*nihongo\s*\|\|([^\\|}]+)\|.*?\}\}/$1/ig;  # remove {{nihongo||text|...}}
         $template =~ s/\{\{\s*zh\s*(?:\|[^\|]*)*\|l=([^\|\}]+)/$1/ig;   # remove {{zh|l=text}}
+
+        $template =~ s/\{\{\s*wikiLeaks cable\s*\|(?:id=)?(.+)\}\}/WikiLeaks cable: $1/ig;    # remove {{wikiLeaks cable|id=text|}}
 
         # should the text be removed or kept?
         $template =~ s/\s*\{\{\s*lang-el\s*\|[^\}]+\}\}//ig;            # remove {{lang-el|remove}}
@@ -366,6 +376,8 @@ sub removeTemplates {
         $template =~ s/\{\{\s*snd\s*\}\}/ – /ig;                        # replace {{snd}}
 
         $template =~ s/\{\{\s*nbsp\s*\}\}/ /ig;                         # replace {{nbsp}}
+
+        $template =~ s/\{\{\s*dot\s*\}\}/ · /ig;                        # replace {{dot}}
 
         $template =~ s/\{\{\s*shy\s*\}\}//ig;                           # remove {{shy}}
 
