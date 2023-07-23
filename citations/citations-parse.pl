@@ -12,6 +12,7 @@ use Getopt::Std;
 use HTML::Entities;
 use MediaWiki::DumpFile::FastPages;
 use Number::Format qw(:subs);
+use URI::Escape;
 
 use lib dirname(__FILE__) . '/../modules';
 
@@ -214,7 +215,7 @@ sub pageType {
     if ($text =~ /^\s*#redirect\s*:?\s*\[\[\s*:?\s*(.+?)\s*(?:\]|(?<!&)#|\n|\|)/i) {
         my $target = $1;
         $target = decode_entities($target);
-        $target =~ s/%26/&/;
+        $target = uri_unescape($target);
         $target =~ tr/_/ /;
         $target =~ s/ {2,}/ /g;
         $target =~ s/^ //;
