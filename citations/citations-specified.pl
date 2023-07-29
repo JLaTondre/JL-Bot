@@ -12,12 +12,14 @@ use Getopt::Std;
 use lib dirname(__FILE__) . '/../modules';
 
 use citations qw(
+    checkInterwiki
     findCitation
     findIndividual
     findNormalizations
     findRedirectExpansions
     formatCitation
     isUppercaseMatch
+    loadInterwiki
     loadRedirects
     normalizeCitation
     removeControlCharacters
@@ -50,6 +52,7 @@ my $DBTITLES     = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-titles.sqlite3';
 my $DBINDIVIDUAL = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-individual.sqlite3';
 my $DBSPECIFIC   = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-specific.sqlite3';
 my $BOTINFO      = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
+my $INTERWIKI    = dirname(__FILE__) . '/interwiki-prefixes.cfg';
 
 my $FALSEPOSITIVES = 'User:JL-Bot/Citations.cfg';
 
@@ -227,6 +230,7 @@ sub formatDOICitation {
     my $prefix = shift;
     my $citation = shift;
     my $ref = shift;
+    my $interwiki = shift;
 
     my $citations = $ref->{'citation-count'};
     my $articles = scalar keys %{$ref->{'articles'}};
@@ -255,6 +259,9 @@ sub formatDOICitation {
 
     my $format = 'nonexistent';
     if ($citation =~ /[#<>\[\]\|{}_]/) {
+        $format = 'nowiki';
+    }
+    elsif (checkInterwiki($citation, $interwiki)) {
         $format = 'nowiki';
     }
     else {
@@ -290,6 +297,7 @@ sub generateResult {
     my $falsePositives = shift;
     my $dbSpecific = shift;
     my $dbTitles = shift;
+    my $interwiki = shift;
 
     my $hierarchy = {};             # citation hierarchy
     my $citations = {};             # citation format, counts, & articles
@@ -537,7 +545,7 @@ sub generateResult {
                 $doiCitations->{$prefix}->{$citation} = {};
 
                 # include prefix as same journal can be entered with multiple prefixes
-                $citations->{$prefix . '::' . $citation}->{'formatted'} = formatDOICitation($dbTitles, $prefix, $citation, $record);
+                $citations->{$prefix . '::' . $citation}->{'formatted'} = formatDOICitation($dbTitles, $prefix, $citation, $record, $interwiki);
                 $citations->{$prefix . '::' . $citation}->{'count'} = $record->{'citation-count'};
                 $citations->{$prefix . '::' . $citation}->{'articles'} = $record->{'articles'};
             }
@@ -565,7 +573,7 @@ sub generateResult {
                 # update citation record with combined result
                 my $replacement = $prefix . '::';
                 (my $title = $match) =~ s/$replacement//;                                                   # back out prefix from title if field match
-                $citations->{$match}->{'formatted'} = formatDOICitation($dbTitles, $prefix, $title, $record);
+                $citations->{$match}->{'formatted'} = formatDOICitation($dbTitles, $prefix, $title, $record, $interwiki);
                 $citations->{$match}->{'count'} = $record->{'citation-count'};
                 $citations->{$match}->{'articles'} = $record->{'articles'};
             }
@@ -573,7 +581,7 @@ sub generateResult {
                 # new record
                 $doiCitations->{$prefix}->{$citation} = {};
                 # include prefix as same journal can be entered with multiple prefixes
-                $citations->{$prefix . '::' . $citation}->{'formatted'} = formatDOICitation($dbTitles, $prefix, $citation, $record);
+                $citations->{$prefix . '::' . $citation}->{'formatted'} = formatDOICitation($dbTitles, $prefix, $citation, $record, $interwiki);
                 $citations->{$prefix . '::' . $citation}->{'count'} = $record->{'citation-count'};
                 $citations->{$prefix . '::' . $citation}->{'articles'} = $record->{'articles'};
             }
@@ -883,6 +891,10 @@ else {
 my $dbTitles = citationsDB->new;
 $dbTitles->openDatabase($DBTITLES);
 
+# load Interwiki prefixes
+
+my $interwiki = loadInterwiki($INTERWIKI);
+
 # load false positives
 
 my ($falsePositives, $fpRevision) = retrieveFalsePositives($BOTINFO, $FALSEPOSITIVES, $dbTitles);
@@ -963,7 +975,8 @@ if ($processPublishers) {
             $normalizations,
             $falsePositives,
             $dbSpecific,
-            $dbTitles
+            $dbTitles,
+            $interwiki
         );
         saveResult($dbSpecific, 'publishers', $publisher, $result) if ($result);
     }
@@ -985,7 +998,8 @@ if ($processQuestionable) {
             $normalizations,
             $falsePositives,
             $dbSpecific,
-            $dbTitles
+            $dbTitles,
+            $interwiki
         );
         saveResult($dbSpecific, 'questionables', $questionable, $result) if ($result);
     }
