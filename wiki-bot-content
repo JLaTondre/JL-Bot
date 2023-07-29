@@ -98,11 +98,11 @@ my %sources = (                                     # content types & their resp
     'content-good-topics'                 => { 'Category:Wikipedia Good topics' => 1, },
     'content-former-featured-topics'      => { 'Category:Wikipedia former featured topics' => 1, },
     'content-featured-sounds'             => { 'Template:Featured sound' => 1, },
-    'content-vital-articles-level-1'      => { 'Category:All Wikipedia level-1 vital articles' => 1, },
-    'content-vital-articles-level-2'      => { 'Category:All Wikipedia level-2 vital articles' => 1, },
-    'content-vital-articles-level-3'      => { 'Category:All Wikipedia level-3 vital articles' => 1, },
-    'content-vital-articles-level-4'      => { 'Category:All Wikipedia level-4 vital articles' => 1, },
-    'content-vital-articles-level-5'      => { 'Category:All Wikipedia level-5 vital articles' => 1, },
+    'content-vital-articles-level-1'      => { 'Category:Wikipedia level-1 vital articles' => 1, },
+    'content-vital-articles-level-2'      => { 'Category:Wikipedia level-2 vital articles' => 1, },
+    'content-vital-articles-level-3'      => { 'Category:Wikipedia level-3 vital articles' => 1, },
+    'content-vital-articles-level-4'      => { 'Category:Wikipedia level-4 vital articles' => 1, },
+    'content-vital-articles-level-5'      => { 'Category:Wikipedia level-5 vital articles' => 1, },
 );
 
 my %icons = (                                       # content types & their respective icons
