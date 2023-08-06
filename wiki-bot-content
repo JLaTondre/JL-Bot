@@ -166,9 +166,41 @@ my $itntalk;          # hold itntalk template parsing errors
 my $pictureoftheday;  # hold pictureoftheday template parsing errors
 my $vital;            # hold vital template parsing errors
 
+my $bannerPattern = 'Template:WikiProject banner shell';    # banner shell pattern matching
+my $vitalPattern = 'Template:WikiProject Vital Articles';   # vital articles pattern matching
+
 #
 # Subroutines
 #
+
+sub buildPattern {
+
+    # This subroutine builds an regex OR pattern for matching a template and its
+    # redirects.  It is passed the bot and the template and returns the pattern.
+
+    # TO DO: Move to module as also used in wiki-bot-inuse
+    # TO DO: Should be used for all templates matched on talk pages
+
+    my $bot      = shift;
+    my $template = shift;
+
+    print "Building template pattern for $template ...\n";
+
+    my $pattern .= $template . '|';
+
+    my $redirects = $bot->getRedirects($template, 10);
+    for my $redirect (sort keys %$redirects) {
+        $pattern .= $redirect . '|';
+    }
+
+    $pattern =~ s/Template://g;
+    $pattern =~ s/ /\[ _\]\+/g;
+    $pattern =~ s/\|$//;
+
+    $pattern = qr/(?:Template:\s*)?(?:$pattern)/i;
+
+    return $pattern;
+}
 
 sub calculateDykPage {
 
@@ -1191,25 +1223,24 @@ sub parsePictureDay {
 sub parseVital {
 
     # This function parses the talk page for the vital class
+    # It uses three global variables: $bannerPattern, $vitalPattern, & $vital
+
+    # TO DO: If rewritten, patterns should be passed in. Possibly through a configuration
+    # hash so it simplifies passing through multiple subroutine levels.
 
     my $text = shift;
     my $talk = shift;
 
-    my $result = 'NONE';
-
-    if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va\s*\|)/is) {
-        if ($text =~ /\{\{\s*(?:Template:\s*)?(?:vital[_ ]article|va)\s*\|.*?class\s*=\s*(.+?)[\|\}]/ims) {
-            my $class = $1;
-            $result = $class;
-        }
-        else {
-            $result = 'MISSING';
-            $vital->{$talk} = 1;
-        }
-
+    if ($text =~ /\{\{\s*$vitalPattern[^}]+class\s*=\s*(.+?)\s*[\|\}]/is) {
+        return $1;
     }
 
-    return $result;
+    if ($text =~ /\{\{\s*$bannerPattern[^{}]+class\s*=\s*(.+?)\s*[\|\}]/is) {
+        return $1;
+    }
+
+    $vital->{$talk} = 1;
+    return 'MISSING';
 }
 
 sub saveResults {
@@ -1307,6 +1338,12 @@ my $dbh = DBI->connect("DBI:SQLite:dbname=$database", "", "", { RaiseError => 1 
 
 print "\nRetrieving italic titles ...\n\n";
 my $italics = $bot->getTransclusions('Template:Italic title');
+
+# pattern matching
+
+$bannerPattern = buildPattern($bot, $bannerPattern);
+$vitalPattern = buildPattern($bot, $vitalPattern);
+print "\n";
 
 # algorithm:
 # find pages transcluding bot template
