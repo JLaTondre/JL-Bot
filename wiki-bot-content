@@ -1231,12 +1231,12 @@ sub parseVital {
     my $text = shift;
     my $talk = shift;
 
-    if ($text =~ /\{\{\s*$vitalPattern[^}]+class\s*=\s*(.+?)\s*[\|\}]/is) {
-        return $1;
+    if ($text =~ /\{\{\s*$vitalPattern[^\}]+class\s*=\s*([^\|\{\}]+?)\s*(?:\||\}\}|\{\{)/is) {
+        return $1 unless ($1 =~ /^\s*$/);
     }
 
-    if ($text =~ /\{\{\s*$bannerPattern[^{}]+class\s*=\s*(.+?)\s*[\|\}]/is) {
-        return $1;
+    if ($text =~ /\{\{\s*$bannerPattern[^\{\}]+class\s*=\s*([^\|\{\}]+?)\s*(?:\||\}\}|\{\{)/is) {
+        return $1 unless ($1 =~ /^\s*$/);
     }
 
     $vital->{$talk} = 1;
