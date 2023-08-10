@@ -2,6 +2,7 @@
 
 import csv
 import glob
+import inspect
 import os
 import re
 import sys
@@ -180,8 +181,19 @@ def saveSummary(site, listing):
 
     print('Saving', page, '...')
 
-    text = 'These pages are listing of Crossref registrants:\n'
-    text += '{{columns-list|\n'
+    text = inspect.cleandoc('''<inputbox>
+        <inputbox>
+        bgcolor=
+        type=fulltext
+        prefix=User:JL-Bot/DOI/
+        break=yes
+        width=70
+        searchbuttonlabel=Search DOI registrants
+        </inputbox>
+
+        These pages are listing of Crossref registrants:
+        {{columns-list|
+    ''')
     for doi in listing:
         text += '* [[User:JL-Bot/DOI/' + doi + '|' + doi + ']]\n'
 
