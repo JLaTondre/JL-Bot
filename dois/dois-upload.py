@@ -182,7 +182,6 @@ def saveSummary(site, listing):
     print('Saving', page, '...')
 
     text = inspect.cleandoc('''<inputbox>
-        <inputbox>
         bgcolor=
         type=fulltext
         prefix=User:JL-Bot/DOI/
@@ -194,6 +193,7 @@ def saveSummary(site, listing):
         These pages are listing of Crossref registrants:
         {{columns-list|
     ''')
+    text += '\n'
     for doi in listing:
         text += '* [[User:JL-Bot/DOI/' + doi + '|' + doi + ']]\n'
 
