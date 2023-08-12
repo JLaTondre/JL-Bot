@@ -1,15 +1,11 @@
 #!/bin/bash
 
+# This should be run prior to parsing a new Wikipedia database dump
+
 LOCATION="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 DIRECTORY=$LOCATION/dois
 
 # function
-
-function findLatest01dump() {
-    # last dump file that is a first of the month dump
-    FILE=`ls enwiki-*01-pages-articles.xml.bz2 2> /dev/null | sort -n | tail -1`
-    echo $FILE | sed -e 's/^.*enwiki-\([0-9]*\)-pages.*$/\1/'
-}
 
 function findLatestRegistrants() {
     # last doi file
@@ -52,7 +48,6 @@ set -e
 
 # find current versions
 
-DUMPFILE=$(findLatest01dump)
 REGFILE=$(findLatestRegistrants)
 
 # check for resume option (will trump new version detection)
@@ -63,13 +58,8 @@ then
     OPTION="-r $REGFILE"
 fi
 
-# determine if processing needed
+# processing
 
-if [ "$REGFILE" -lt "$DUMPFILE" ] || [ -n "$OPTION" ]
-then
-    $DIRECTORY/dois-retrieve.py ${OPTION}
-    $DIRECTORY/dois-upload.py
-    $DIRECTORY/dois-compare.py
-else
-    echo "DOI registrant processing not required"
-fi
+$DIRECTORY/dois-retrieve.py ${OPTION}
+$DIRECTORY/dois-upload.py
+$DIRECTORY/dois-compare.py
