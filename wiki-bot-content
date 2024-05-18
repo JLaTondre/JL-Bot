@@ -58,7 +58,6 @@ my %sections = (                                    # content types & their resp
     'content-featured-topics'             => 'Featured topics',
     'content-good-topics'                 => 'Good topics',
     'content-former-featured-topics'      => 'Former featured topics',
-    'content-featured-sounds'             => 'Featured sounds',
     'content-vital-articles-level-1'      => 'Level 1 vital articles',
     'content-vital-articles-level-2'      => 'Level 2 vital articles',
     'content-vital-articles-level-3'      => 'Level 3 vital articles',
@@ -97,7 +96,6 @@ my %sources = (                                     # content types & their resp
                                              },
     'content-good-topics'                 => { 'Category:Wikipedia Good topics' => 1, },
     'content-former-featured-topics'      => { 'Category:Wikipedia former featured topics' => 1, },
-    'content-featured-sounds'             => { 'Template:Featured sound' => 1, },
     'content-vital-articles-level-1'      => { 'Category:Wikipedia level-1 vital articles' => 1, },
     'content-vital-articles-level-2'      => { 'Category:Wikipedia level-2 vital articles' => 1, },
     'content-vital-articles-level-3'      => { 'Category:Wikipedia level-3 vital articles' => 1, },
@@ -130,7 +128,6 @@ my %icons = (                                       # content types & their resp
     'content-featured-topics'             => '{{icon|FT}}',
     'content-good-topics'                 => '{{icon|GT}}',
     'content-former-featured-topics'      => '{{icon|FFT}}',
-    'content-featured-sounds'             => '{{icon|FS}}',
     'content-vital-articles-level-1'      => '{{icon|Vital}}',
     'content-vital-articles-level-2'      => '{{icon|Vital}}',
     'content-vital-articles-level-3'      => '{{icon|Vital}}',
@@ -444,6 +441,7 @@ sub getParameters {
         if (/^\s*(content-[\w-]+)\s*$/i) {
             next if ($1 eq 'content-valued-pictures');            # content type deleted at MfD
             next if ($1 eq 'content-featured-sound-candidates');  # content type abandoned & category deleted at CfD
+            next if ($1 eq 'content-featured-sounds');            # content type abandoned
             next if (exists $duplicate{$1});                      # ignore if already been seen
             $duplicate{$1} = 1;
             push @types, lc $1;
