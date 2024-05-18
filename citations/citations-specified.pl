@@ -381,7 +381,10 @@ sub generateResult {
             if (exists $specified->{$redirect}->{'record'}) {
                 my $record = $specified->{$redirect}->{'record'};
 
-                die "selected =/= redirect! how...\n  selected = $selected\n  redirect = $redirect\n" if ($record->{'target'} ne $selected);    # check
+                if ($record->{'target'} ne $selected) {
+                    print "\nwarning selected =/= redirect! how...\n  selected = $selected\n  redirect = $redirect\n\n";
+                    next;
+                }
 
                 $citations->{$redirect}->{'formatted'} = formatCitation($redirect, $record);
                 $citations->{$redirect}->{'count'} = $record->{'citation-count'};
