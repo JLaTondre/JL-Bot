@@ -289,7 +289,7 @@ for my $type (@TYPES) {
                     # citation results in redirect
                     my $redirect = queryTitle($dbTitles, $title->{'target'});
                     if ($redirect) {
-                        while ($redirect->{'pageType'} eq 'REDIRECT') {
+                        while (($redirect->{'pageType'} eq 'REDIRECT') or ($redirect->{'pageType'} eq 'REDIRECT-UNNECESSARY')) {
                             # resolve double redirects
                             $redirect = queryTitle($dbTitles, $redirect->{'target'});
                         }
