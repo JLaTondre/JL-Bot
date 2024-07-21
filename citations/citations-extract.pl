@@ -284,14 +284,12 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*URL\s*\|[^\|]+\|\s*(.+?)\s*\}\}/$1/g;     # remove link from {{URL|link|text}}
 
-        $template =~ s/\s*\{\{\s*dead link\s*(?:\|.*?)?\}\}//ig;        # remove {{dead link|date=...}}
+        $template =~ s/\s*\{\{\s*dead ?link\s*(?:\|.*?)?\}\}//ig;       # remove {{dead link|date=...}}
         $template =~ s/\s*\{\{\s*cbignore\s*(?:\|.*?)?\}\}//ig;         # remove {{cbignore|bot=...|}}
 
         $template =~ s/\{\{\s*abbr\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;       # remove {{abbr|text|...}}
         $template =~ s/\{\{\s*sup\s*\|([^\}]+)\}\}/$1/ig;               # remove {{sup|text}}
         $template =~ s/\{\{\s*title case\s*\|([^\}]+)\}\}/$1/ig;        # remove {{title case|text}}
-
-        $template =~ s/\{\{\s*req\s*\|([^\}]+)\}\}/$1/ig;               # remove {{req|text}}
 
         $template =~ s/\{\{\s*not a typo\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;   # remove {{not a typo|text|text}}
         $template =~ s/\{\{\s*not a typo\s*\|([^\}]+)\}\}/$1/ig;               # remove {{not a typo|text}}
@@ -302,18 +300,11 @@ sub removeTemplates {
         $template =~ s/\{\{\s*text\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;         # remove {{text|text|text}}
         $template =~ s/\{\{\s*text\s*\|([^\}]+)\}\}/$1/ig;                     # remove {{text|text}}
 
-        $template =~ s/\{\{\s*convert\s*\|([^\|]+)\|([^\|]+)(?:\|.+)?\}\}/$1 $2/ig;    # convert {{not a typo|text|text|remove}}
+        $template =~ s/\{\{\s*convert\s*\|([^\|]+)\|([^\|]+)(?:\|.+)?\}\}/$1 $2/ig;    # remove {{convert|text|text|remove}}
 
-        $template =~ s/\s*\{\{\s*sic\s*(?:\|.*?)?\}\}//ig;              # remove {{sic|remove}}
-
-        $template =~ s/\s*\{\{\s*unicode\s*\|([^\}]+)\}\}/$1/ig;        # remove {{unicode|text}}
-        $template =~ s/\s*\{\{\s*polytonic\s*\|([^\}]+)\}\}/$1/ig;      # remove {{polytonic|text}}
+        # $template =~ s/\s*\{\{\s*sic\s*(?:\|.*?)?\}\}//ig;              # remove {{sic|remove}}
 
         $template =~ s/\{\{\s*annotated link\s*\|([^\}\|]+).*?\}\}/$1/ig;;     # remove {{annotated link|text|...}}
-
-        $template =~ s/\{\{\s*asiantitle\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;  # remove {{asiantitle|no|no|text|...}}
-        $template =~ s/\{\{\s*asiantitle\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;          # remove {{asiantitle|no|text|...}}
-        $template =~ s/\{\{\s*asiantitle\s*\|([^\}\|]+).*?\}\}/$1/ig;                  # remove {{asiantitle|text|...}}
 
         $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;   # remove {{transl|no|no|text|...}}
         $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;           # remove {{transl|no|text|...}}
@@ -344,7 +335,6 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*lang-fr\s*\|[^\}]+\}\}//ig;            # remove {{lang-fr|remove}}
         $template =~ s/\s*\{\{\s*lang-ru\s*\|[^\}]+\}\}//ig;            # remove {{lang-ru|remove}}
         $template =~ s/\s*\{\{\s*nihongo2\s*\|[^\}]+\}\}//ig;           # remove {{nihongo2|remove}}
-        $template =~ s/\s*\{\{\s*hebrew\s*\|[^\}]+\}\}//ig;             # remove {{hebrew|remove}}
         $template =~ s/\s*\{\{\s*my\s*\|[^\}]+\}\}//ig;                 # remove {{my|remove}}
 
         $template =~ s/\s*\{\{\s*in lang\s*\|[^\}]+\}\}//ig;            # remove {{in lang|remove}}
@@ -410,6 +400,8 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*ISSN\s*\|([^\}]+)\}\}//ig;             # remove {{ISSN|remove}}
         $template =~ s/\s*\{\{\s*JSTOR(?:\s*\|([^\}]+))?\}\}//ig;       # remove {{JSTOR|remove}}
 
+        $template =~ s/\{\{\s*nobr\s*\|([^\}]+)\}\}/$1/ig;              # remove {{nobr|text}}
+        $template =~ s/\{\{\s*normal\s*\|([^\}]+)\}\}/$1/ig;            # remove {{normal|text}}
         $template =~ s/\{\{\s*nowrap\s*\|([^\}]+)\}\}/$1/ig;            # remove {{nowrap|text}}
         $template =~ s/\{\{\s*noitalic\s*\|([^\}]+)\}\}/$1/ig;          # remove {{noitalic|text}}
         $template =~ s/\{\{\s*small\s*\|([^\}]+)\}\}/$1/ig;             # remove {{small|text}}
@@ -417,8 +409,6 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*gr[ae]y\s*\|([^\}]+)\}\}/$1/ig;           # remove {{gray|text}}
 
-        $template =~ s/\{\{\s*lc:\s*([^\}]+)\}\}/\L$1/ig;               # remove {{lc:text}} where kept text is converted to lowercase
-        $template =~ s/\{\{\s*uc:\s*([^\}]+)\}\}/\U$1/ig;               # remove {{uc:text}} where kept text is converted to uppercase
         $template =~ s/\{\{\s*lcfirst:\s*(.)([^\}]+)\}\}/\l$1$2/ig;     # remove {{lcfirst:text}} where first letter of kept text is converted to lowercase
         $template =~ s/\{\{\s*ucfirst:\s*(.)([^\}]+)\}\}/\u$1$2/ig;     # remove {{ucfirst:text}} where first letter of kept text is converted to uppercase
 
@@ -433,6 +423,11 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*linktext\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;   # remove {{linktext|text|...}}
         $template =~ s/\{\{\s*no ?italics?\s*\|([^\}]+)\}\}/$1/ig;      # remove {{noitalic|text}}
+
+        $template =~ s/\{\{\s*no self link\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;  # remove {{not a typo|remove|text}}
+        $template =~ s/\{\{\s*no self link\s*\|([^\}]+)\}\}/$1/ig;            # remove {{not a typo|text}}
+        $template =~ s/\{\{\s*nsl\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;           # remove {{not a typo|remove|text}}
+        $template =~ s/\{\{\s*nsl\s*\|([^\}]+)\}\}/$1/ig;                     # remove {{not a typo|text}}
 
         $citation =~ s/\Q$start\E/$template/;
 
