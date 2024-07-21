@@ -62,13 +62,11 @@ my @CITATIONS = (
     'Template:Cite serial',
     'Template:Cite sign',
     'Template:Cite speech',
-    'Template:Cite techreport',
+    'Template:Cite tech report',
     'Template:Cite thesis',
     'Template:Cite web',
     'Template:Bluebook journal',
     'Template:Vcite journal',
-    'Template:Vcite2 journal',
-    'Template:Cite LSA',
 );
 
 my @DOI = (
