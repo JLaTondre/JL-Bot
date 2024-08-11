@@ -128,10 +128,10 @@ def isValidPrefix(prefix, registrant):
 
     # Ignore invalid (test) prefixes returned by Crossref members API
 
-    if not re.search('^10.\d{4,5}$', prefix):
+    if not re.search(r'^10.\d{4,5}$', prefix):
         return False
 
-    if re.search('^10.[89]\d{4}$', prefix):
+    if re.search(r'^10.[89]\d{4}$', prefix):
         return False
 
     if (
