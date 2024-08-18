@@ -7,6 +7,7 @@ use strict;
 
 use Benchmark;
 use File::Basename;
+use File::Grep qw (fgrep);
 use Getopt::Std;
 use HTML::Entities;
 use Number::Format qw(format_number);
@@ -106,6 +107,8 @@ sub doiStatistics {
     # Generate statistics based on the dois
 
     my $databaseFile = shift;
+    my $citationFile = shift;
+    my $doiFile = shift;
 
     print "  generating DOI statistics ...\n";
 
@@ -114,6 +117,8 @@ sub doiStatistics {
 
     my $prefix;
     my $entire;
+    my $count;
+    my $free;
 
     # query prefix
 
@@ -139,12 +144,30 @@ sub doiStatistics {
         $entire = $ref->{'COUNT(DISTINCT entire)'};
     }
 
+    # query count
+
+    $sth = $database->prepare(q{
+        SELECT SUM(count)
+        FROM dois
+    });
+    $sth->execute();
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+        $count = $ref->{'SUM(count)'};
+    }
+
     $database->disconnect;
+
+    # grep doi-access=free
+
+    my $access = ( fgrep { /\|\s*doi-access\s*=\s*free\s*(?=\||\}\}$)/ } ($citationFile, $doiFile) );
 
     # combine
 
-    my $result = '* ' . format_number($prefix) . " distinct DOI prefixes\n\n";
-    $result .= '* ' . format_number($entire) . " distinct DOIs\n";
+    my $result = '* ' . format_number($count) . " total DOI citations:\n";
+    $result .= '** ' . format_number($prefix) . " distinct DOI prefixes\n";
+    $result .= '** ' . format_number($entire) . " distinct DOIs\n";
+    $result .= '** ' . format_number($access) . " marked with {{para|doi-access|free}}\n";
 
     return $result;
 }
@@ -356,7 +379,7 @@ push @statistics, templateStatistics($bot, 'citation', $CTEMPLATES, "{{cite xxx}
 push @statistics, templateStatistics($bot, 'DOI', $DTEMPLATES, "total DOI templates");
 push @statistics, articleStatistics($CITATIONS);
 push @statistics, journalStatistics($CITATIONS);
-push @statistics, doiStatistics($CITATIONS);
+push @statistics, doiStatistics($CITATIONS, $CTEMPLATES, $DTEMPLATES);
 
 # output results
 
