@@ -165,9 +165,9 @@ sub doiStatistics {
     # combine
 
     my $result = '* ' . format_number($count) . " total DOI citations:\n";
-    $result .= '** ' . format_number($prefix) . " distinct DOI prefixes\n";
     $result .= '** ' . format_number($entire) . " distinct DOIs\n";
     $result .= '** ' . format_number($access) . " marked with {{para|doi-access|free}}\n";
+    $result .= '** ' . format_number($prefix) . " distinct DOI prefixes\n";
 
     return $result;
 }
