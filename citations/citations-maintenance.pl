@@ -52,6 +52,7 @@ my @TABLES = (
     'CREATE TABLE spellings(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE patterns(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE diacritics(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE dots(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
 );
 
@@ -173,7 +174,7 @@ sub findCapitalizationTargets {
     return $results;
 }
 
-sub findCitations {
+sub findDiacriticCitations {
 
     # Finds citations without articles that have diacritics
 
@@ -195,7 +196,7 @@ sub findCitations {
         $sql .= 'AND dFormat = "nonexistent"'
     }
     else {
-        die "\n\nERROR: findCitations should not reach here!\n\n";
+        die "\n\nERROR: findDiacriticCitations should not reach here!\n\n";
     }
 
     my $results;
@@ -207,6 +208,56 @@ sub findCitations {
         my $term = NFKD($citation);
         $term =~ s/\p{NonspacingMark}//g;
         $results->{$term}->{$citation} = 1;
+    }
+
+    return $results;
+}
+
+sub findDotCitations {
+
+    # Finds citations without articles that have dots
+
+    my $database = shift;
+    my $type = shift;
+
+    print "  finding " . $type . " citations ...\n";
+
+    my $sql = '
+        SELECT citation, target, dFormat, cCount, aCount
+        FROM individuals
+        WHERE type = "journal"
+    ';
+
+    if ($type eq 'existent') {
+        $sql .= 'AND dFormat != "nonexistent"'
+    }
+    elsif ($type eq 'nonexistent') {
+        $sql .= 'AND dFormat = "nonexistent"'
+    }
+    else {
+        die "\n\nERROR: findDotCitations should not reach here!\n\n";
+    }
+
+    my $results;
+
+    my $sth = $database->prepare($sql);
+    $sth->execute();
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $citation = $ref->{'citation'};
+        my $target = $ref->{'target'};
+        my $dFormat = $ref->{'dFormat'};
+        my $cCount = $ref->{'cCount'};
+        my $aCount = $ref->{'aCount'};
+        (my $term = $citation) =~ s/\.//g;
+        if ($type ne 'nonexistent') {
+            $results->{$target}->{$citation}->{'term'} = $term;
+            $results->{$target}->{$citation}->{'dFormat'} = $dFormat;
+        }
+        else {
+            $results->{$term}->{$citation}->{'dFormat'} = $dFormat;
+            $results->{$term}->{$citation}->{'citation-count'} = $cCount;
+            $results->{$term}->{$citation}->{'article-count'} = $aCount;
+        }
     }
 
     return $results;
@@ -783,28 +834,28 @@ for my $target (keys %$targets) {
 
 # process diacritics based on red links
 
-my $blueLinks = findCitations($dbMaintain, "existent");
-my $redLinks = findCitations($dbMaintain, "nonexistent");
+my $diacriticBlueLinks = findDiacriticCitations($dbMaintain, "existent");
+my $diacriticRedLinks = findDiacriticCitations($dbMaintain, "nonexistent");
 
-$total = scalar keys %$blueLinks;
-print "  processing $total blue links ...\n";
+$total = scalar keys %$diacriticBlueLinks;
+print "  processing $total blue links for diacritics ...\n";
 
-for my $nonDiacritic (keys %$blueLinks) {
+for my $nonDiacritic (keys %$diacriticBlueLinks) {
 
-    if (exists $redLinks->{$nonDiacritic}) {
+    if (exists $diacriticRedLinks->{$nonDiacritic}) {
 
         my $results;
 
         # if multiple blue links, arbitrarily use first
 
-        my @blues = sort keys %{$blueLinks->{$nonDiacritic}};
+        my @blues = sort keys %{$diacriticBlueLinks->{$nonDiacritic}};
         my $first = $blues[0];
 
         next if (exists $targets->{$first}); # skipping as already seen via redirects
 
         # check red links
 
-        for my $red (keys %{$redLinks->{$nonDiacritic}}) {
+        for my $red (keys %{$diacriticRedLinks->{$nonDiacritic}}) {
 
             if (($first ne $nonDiacritic) or ($red ne $nonDiacritic)) {
 
@@ -844,6 +895,58 @@ for my $nonDiacritic (keys %$blueLinks) {
         }
 
     }
+}
+
+# process dots based on red links
+
+my $dotBlueLinks = findDotCitations($dbMaintain, "existent");
+my $dotRedLinks = findDotCitations($dbMaintain, "nonexistent");
+
+$total = scalar keys %$dotBlueLinks;
+print "  processing $total targets for dots ...\n";
+
+for my $target (keys %$dotBlueLinks) {
+
+    my $entries;
+    my $articleTotal = 0;
+    my $citationTotal = 0;
+
+    for my $blueCitation (keys %{$dotBlueLinks->{$target}}) {
+
+        my $blueTerm = $dotBlueLinks->{$target}->{$blueCitation}->{'term'};
+        my $blueFormat = $dotBlueLinks->{$target}->{$blueCitation}->{'dFormat'};
+
+        if (exists $dotRedLinks->{$blueTerm}) {
+
+            $entries .= "* " . setFormat('display', $blueCitation, $blueFormat) . "\n";
+
+            for my $redCitation (keys %{$dotRedLinks->{$blueTerm}}) {
+
+                my $redFormat = $dotRedLinks->{$blueTerm}->{$redCitation}->{'dFormat'};
+                my $redCCount = $dotRedLinks->{$blueTerm}->{$redCitation}->{'citation-count'};
+                my $redACount = $dotRedLinks->{$blueTerm}->{$redCitation}->{'article-count'};
+
+                my $formatted = setFormat('display', $redCitation, $redFormat);
+                $entries .= "** $formatted ($redCCount in $redACount)\n";
+
+            }
+
+            $articleTotal += articleCount($dbMaintain, 'journal', $dotRedLinks->{$blueTerm});
+            $citationTotal += citationCount($dotRedLinks->{$blueTerm});
+
+        }
+    }
+
+    if ($entries) {
+
+        my $sth = $dbMaintain->prepare("
+            INSERT INTO dots (target, entries, articles, citations)
+            VALUES (?, ?, ?, ?)
+        ");
+        $sth->execute($target, $entries, $articleTotal, $citationTotal);
+
+    }
+
 }
 
 $dbMaintain->commit;
