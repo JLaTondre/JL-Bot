@@ -118,6 +118,7 @@ then
     outputTable db-maintenance.sqlite3 x-spellings-$TIMESTAMP spellings 'target, citations DESC, articles DESC'
     outputTable db-maintenance.sqlite3 x-patterns-$TIMESTAMP patterns 'target, citations DESC, articles DESC'
     outputTable db-maintenance.sqlite3 x-diacritics-$TIMESTAMP diacritics 'target, citations DESC, articles DESC'
+    outputTable db-maintenance.sqlite3 x-dots-$TIMESTAMP dots 'target, citations DESC, articles DESC'
     exit
 fi
 
