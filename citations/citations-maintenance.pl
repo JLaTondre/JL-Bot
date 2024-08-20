@@ -248,7 +248,8 @@ sub findDotCitations {
         my $dFormat = $ref->{'dFormat'};
         my $cCount = $ref->{'cCount'};
         my $aCount = $ref->{'aCount'};
-        (my $term = $citation) =~ s/\.//g;
+        my $term = lc $citation;
+        $term =~ s/[\.,]//g;
         if ($type ne 'nonexistent') {
             $results->{$target}->{$citation}->{'term'} = $term;
             $results->{$target}->{$citation}->{'dFormat'} = $dFormat;
@@ -918,15 +919,22 @@ for my $target (keys %$dotBlueLinks) {
 
         if (exists $dotRedLinks->{$blueTerm}) {
 
-            $entries .= "* " . setFormat('display', $blueCitation, $blueFormat) . "\n";
+            my $label = 0;
 
             for my $redCitation (keys %{$dotRedLinks->{$blueTerm}}) {
+
+                next if ((lc $blueCitation) eq (lc $redCitation));
 
                 my $redFormat = $dotRedLinks->{$blueTerm}->{$redCitation}->{'dFormat'};
                 my $redCCount = $dotRedLinks->{$blueTerm}->{$redCitation}->{'citation-count'};
                 my $redACount = $dotRedLinks->{$blueTerm}->{$redCitation}->{'article-count'};
 
                 my $formatted = setFormat('display', $redCitation, $redFormat);
+
+                unless ($label) {
+                    $entries .= "* " . setFormat('display', $blueCitation, $blueFormat) . "\n";
+                    $label = 1;
+                }
                 $entries .= "** $formatted ($redCCount in $redACount)\n";
 
             }
