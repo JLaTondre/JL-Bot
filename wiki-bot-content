@@ -458,12 +458,10 @@ sub getParameters {
             next if (exists $duplicate{$type});           # ignore if already been seen
             $duplicate{$type} = 1;
             push @types, lc $type;
-            given ($level) {
-                when ('a') { $aClass->{$category} = 1; }
-                when ('b') { $bClass->{$category} = 1; }
-                when ('c') { $cClass->{$category} = 1; }
-                default { die "ERROR: Impossible level! [$level]\n"; }
-            }
+            if    ($level eq 'a') { $aClass->{$category} = 1; }
+            elsif ($level eq 'b') { $bClass->{$category} = 1; }
+            elsif ($level eq 'c') { $cClass->{$category} = 1; }
+            else                  { die "ERROR: Impossible level! [$level]\n"; }
         }
 
         # look for 'columns' parameter
@@ -543,19 +541,18 @@ sub getParameters {
         if (/^\s*overflow-(.+?)\s*=\s*(.+?)\s*$/i) {
             my $type = $1;
             my $value = $2;
-            given ($type) {
-                when ('DYK')     { $overflowDYK = $value; }
-                when ('FA')      { $overflowFA  = $value; }
-                when ('GA')      { $overflowGA  = $value; }
-                when ('a-class') { $overflowA   = $value; }
-                when ('b-class') { $overflowB   = $value; }
-                when ('c-class') { $overflowC   = $value; }
-                when ('vital-1') { $overflowV1  = $value; }
-                when ('vital-2') { $overflowV2  = $value; }
-                when ('vital-3') { $overflowV3  = $value; }
-                when ('vital-4') { $overflowV4  = $value; }
-                when ('vital-5') { $overflowV5  = $value; }
-            }
+            if    ($type eq 'DYK')     { $overflowDYK = $value; }
+            elsif ($type eq 'FA')      { $overflowFA  = $value; }
+            elsif ($type eq 'GA')      { $overflowGA  = $value; }
+            elsif ($type eq 'a-class') { $overflowA   = $value; }
+            elsif ($type eq 'b-class') { $overflowB   = $value; }
+            elsif ($type eq 'c-class') { $overflowC   = $value; }
+            elsif ($type eq 'vital-1') { $overflowV1  = $value; }
+            elsif ($type eq 'vital-2') { $overflowV2  = $value; }
+            elsif ($type eq 'vital-3') { $overflowV3  = $value; }
+            elsif ($type eq 'vital-4') { $overflowV4  = $value; }
+            elsif ($type eq 'vital-5') { $overflowV5  = $value; }
+            else                       { die "ERROR: Unknown type! [$type]\n"; }
         }
 
         # look for 'small' parameter
