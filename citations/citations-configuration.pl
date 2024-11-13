@@ -87,8 +87,7 @@ sub findTarget {
         return $target;
     }
     else {
-        print "ERROR: redirect target not detected for $redirect!\n";
-        return 'NONE';
+        die "\nERROR: redirect target not detected for $redirect!\n\n";
     }
 }
 
@@ -322,6 +321,10 @@ for my $redirect (keys %$redirects) {
     }
 
     my ($text, ) = $bot->getText($redirect);
+
+    unless ($text) {
+        die "\nERROR: Page text failed to be returned for $redirect\n\n";
+    }
 
     my $target = findTarget($redirect, $text);
     next if ($target eq "NONE");
