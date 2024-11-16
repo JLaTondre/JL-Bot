@@ -66,7 +66,7 @@ my @DIACRITICS = (
     'Category:Redirects from titles without diacritics',
     'Category:Redirects from titles with diacritics'
 );
-
+my $ABBREVIATIONS = 'Category:Redirects from ISO 4 abbreviations';
 
 #
 # Subroutines
@@ -215,7 +215,7 @@ sub findDiacriticCitations {
 
 sub findDotCitations {
 
-    # Finds citations without articles that have dots
+    # Finds citations & normalize ones without articles that have dots
 
     my $database = shift;
     my $type = shift;
@@ -268,21 +268,21 @@ sub findRedirectTargets {
 
     # Finds the targets of redirects
 
-    my $database = shift;
-    my $typos    = shift;
+    my $database  = shift;
+    my $redirects = shift;
 
-    my $total = scalar keys %$typos;
+    my $total = scalar keys %$redirects;
     print "  finding $total redirect targets ...\n";
 
     my $results;
 
-    for my $typo (keys %$typos) {
+    for my $redirect (keys %$redirects) {
         my $sth = $database->prepare('SELECT target FROM titles WHERE title = ?');
-        $sth->bind_param(1, $typo);
+        $sth->bind_param(1, $redirect);
         $sth->execute();
         while (my $ref = $sth->fetchrow_hashref()) {
             my $target = $ref->{'target'};
-            $results->{$target}->{$typo} = 1;
+            $results->{$target}->{$redirect} = 1;
         }
     }
 
@@ -898,13 +898,27 @@ for my $nonDiacritic (keys %$diacriticBlueLinks) {
     }
 }
 
-# process dots based on red links
+# process dots based on blue links & redirects
+
+print "  retrieving members of $ABBREVIATIONS ...\n";
+my $redirects = $bot->getCategoryMembers($ABBREVIATIONS);
+my $redirectTargets = findRedirectTargets($dbTitles, $redirects);
 
 my $dotBlueLinks = findDotCitations($dbMaintain, "existent");
 my $dotRedLinks = findDotCitations($dbMaintain, "nonexistent");
 
+for my $target (keys %$redirectTargets) {
+    for my $redirect (keys %{$redirectTargets->{$target}}) {
+        (my $term = lc $redirect) =~ s/\s*[\.,]//g;
+        unless (exists $results->{$redirect}->{$target}) {
+            $dotBlueLinks->{$target}->{$redirect}->{'term'} = $term;
+            $dotBlueLinks->{$target}->{$redirect}->{'dFormat'} = 'redirect';
+        }
+    }
+}
+
 $total = scalar keys %$dotBlueLinks;
-print "  processing $total targets for dots ...\n";
+print "  processing $total dot targets ...\n";
 
 for my $target (keys %$dotBlueLinks) {
 
