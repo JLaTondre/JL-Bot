@@ -274,7 +274,7 @@ def queryCrossrefPrefixes(doi, email, api):
         name = r.json()['message']['name']
         prefix = r.json()['message']['prefix']
 
-        if prefix != 'http://id.crossref.org/prefix/' + doi:
+        if prefix != 'https://id.crossref.org/prefix/' + doi:
             sys.stderr.write('ERROR: requested ' + doi + '\nreceived ' + prefix + '\n')
             sys.exit(1)
 
