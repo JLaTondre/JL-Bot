@@ -147,6 +147,8 @@ sub extractField {
 
     $citation =~ s/\{\{\s*Q\s*\|([^\}]+)\}\}/==WIKIDATA==$1==WIKIDATA==/ig;     # keep {{Q|text}}
 
+    $citation =~ s/\s*\(\s*\{\{\s*langx\s*\|[^\}]+\}\}\s*\)//ig;                # remove ({{langx|remove}}) - in parenthesis needs to be done at this level
+
     $citation = removeTemplates($citation);
 
     my $results;
@@ -302,9 +304,8 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*convert\s*\|([^\|]+)\|([^\|]+)(?:\|.+)?\}\}/$1 $2/ig;    # remove {{convert|text|text|remove}}
 
-        # $template =~ s/\s*\{\{\s*sic\s*(?:\|.*?)?\}\}//ig;              # remove {{sic|remove}}
-
         $template =~ s/\{\{\s*annotated link\s*\|([^\}\|]+).*?\}\}/$1/ig;;     # remove {{annotated link|text|...}}
+        $template =~ s/\{\{\s*link if exists\s*\|([^\}]+)\}\}/$1/ig;           # remove {{as written|text}}
 
         $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;   # remove {{transl|no|no|text|...}}
         $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;           # remove {{transl|no|text|...}}
@@ -328,6 +329,10 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*wikiLeaks cable\s*\|(?:id=)?(.+)\}\}/WikiLeaks cable: $1/ig;    # remove {{wikiLeaks cable|id=text|}}
 
+        $template =~ s/\{\{\s*langx\s*(?:\|[^\|]*)*\|lit=([^\|\}]+)/$1/ig;          # remove {{langx|lit=text}}
+        $template =~ s/\{\{\s*langx\s*(?:\|[^\|]*)*\|translation=([^\|\}]+)/$1/ig;  # remove {{langx|translation=text}}
+        $template =~ s/\s*\{\{\s*langx\s*\|[^\}]+\}\}//ig;                          # remove {{langx|remove}}
+
         # should the text be removed or kept?
         $template =~ s/\s*\{\{\s*lang-el\s*\|[^\}]+\}\}//ig;            # remove {{lang-el|remove}}
         $template =~ s/\s*\{\{\s*lang-en\s*\|[^\}]+\}\}//ig;            # remove {{lang-en|remove}}
@@ -335,7 +340,7 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*lang-fr\s*\|[^\}]+\}\}//ig;            # remove {{lang-fr|remove}}
         $template =~ s/\s*\{\{\s*lang-ru\s*\|[^\}]+\}\}//ig;            # remove {{lang-ru|remove}}
         $template =~ s/\s*\{\{\s*nihongo2\s*\|[^\}]+\}\}//ig;           # remove {{nihongo2|remove}}
-        $template =~ s/\s*\{\{\s*my\s*\|[^\}]+\}\}//ig;                 # remove {{my|remove}}
+        $template =~ s/\s*\{\{\s*korean\s*\|[^\}]+\}\}//ig;             # remove {{korean|remove}}
 
         $template =~ s/\s*\{\{\s*in lang\s*\|[^\}]+\}\}//ig;            # remove {{in lang|remove}}
 
@@ -368,6 +373,7 @@ sub removeTemplates {
         $template =~ s/\{\{\s*nbsp\s*\}\}/ /ig;                         # replace {{nbsp}}
 
         $template =~ s/\{\{\s*dot\s*\}\}/ · /ig;                        # replace {{dot}}
+        $template =~ s/\{\{\s*•\s*\}\}/ · /ig;                          # replace {{•}}
 
         $template =~ s/\{\{\s*shy\s*\}\}//ig;                           # remove {{shy}}
 
