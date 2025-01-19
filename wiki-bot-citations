@@ -51,7 +51,7 @@ function getCurrentRevision() {
     for PAGE in ${PAGES[@]}
     do
         # pull 5 revisions & filter them if ignore specified
-        CURL=`curl "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&titles=${PAGE}&rvprop=ids|user&format=json&rvlimit=5" 2> /dev/null`
+        CURL=`curl --data-urlencode "titles=${PAGE}" "https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=ids|user&format=json&rvlimit=5" 2> /dev/null`
         REVID=`echo $CURL | grep -Po '"revid":[0-9]*,.*?,"user":"[^"]*"' | ${IGNORE} | head -1 | sed -e 's/^.*"revid":\([0-9]*\),.*$/\1/'`
         # set to latest if revision found and newer than latest
         if [ -n "$REVID" ] && [ "$REVID" -gt "$LATEST" ]
