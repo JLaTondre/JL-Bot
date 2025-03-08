@@ -53,6 +53,7 @@ my @TABLES = (
     'CREATE TABLE patterns(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE diacritics(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE dots(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
+    'CREATE TABLE brackets(target TEXT, entries TEXT, articles TEXT, citations INTEGER)',
     'CREATE TABLE revisions(type TEXT, revision TEXT)',
 );
 
@@ -144,6 +145,42 @@ sub determineCapitalizationType {
     }
 
     return 0;
+}
+
+sub findBracketTargets {
+
+    # Finds targets for bracket processing
+
+    my $database = shift;
+
+    print "  finding bracket targets ...\n";
+
+    my $results;
+
+    my $sth = $database->prepare('
+        SELECT citation, target, dFormat, cCount, aCount
+        FROM individuals
+        WHERE type = "journal"
+    ');
+    $sth->execute();
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $citation = $ref->{'citation'};
+        my $target = $ref->{'target'};
+        my $dFormat = $ref->{'dFormat'};
+        my $cCount = $ref->{'cCount'};
+        my $aCount = $ref->{'aCount'};
+        if (
+            ($citation =~ /[\(\[][\p{IsLu}\p{IsLt}]+[\)\]]\s*$/) or
+            ($citation =~ /(?:\s[-–—]|[:;])+\s*[\p{IsLu}\p{IsLt}]+\s*$/)
+        ) {
+            $target = $citation if ($target eq '&mdash;');
+            $results->{$target}->{$citation}->{'d-format'} = $dFormat;
+            $results->{$target}->{$citation}->{'citation-count'} = $cCount;
+            $results->{$target}->{$citation}->{'article-count'} = $aCount;
+        }
+    }
+
+    return $results;
 }
 
 sub findCapitalizationTargets {
@@ -970,6 +1007,29 @@ for my $target (keys %$dotBlueLinks) {
         $sth->execute($target, $entries, $articleTotal, $citationTotal);
 
     }
+
+}
+
+# process brackets
+
+$targets = findBracketTargets($dbMaintain);
+
+$total = scalar keys %$targets;
+print "  processing $total bracket results ...\n";
+
+for my $target (keys %$targets) {
+
+    my $results = $targets->{$target};
+
+    my $entries = formatTypoEntries($results);
+    my $articles = articleCount($dbMaintain, 'journal', $results);
+    my $citations = citationCount($results);
+
+    my $sth = $dbMaintain->prepare("
+        INSERT INTO brackets (target, entries, articles, citations)
+        VALUES (?, ?, ?, ?)
+    ");
+    $sth->execute($target, $entries, $articles, $citations);
 
 }
 

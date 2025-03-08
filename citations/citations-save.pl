@@ -959,16 +959,17 @@ sub saveMaintenance {
     return;
 }
 
-sub generateDiacritics {
+sub generateMaintenance {
 
-    # Generate diacritics results from database
+    # Generate specified maintenance results from database
 
     my $database = shift;
     my $row = shift;
+    my $table = shift;
 
     my $sth = $database->prepare("
         SELECT target, entries, articles, citations
-        FROM diacritics
+        FROM $table
         WHERE citations > 0
         ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
     ");
@@ -986,77 +987,11 @@ sub generateDiacritics {
 
         $rank++;
 
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
+        unless (($table eq 'patterns') or ($target eq 'Invalid')) {
+            $target = "[[$target]]";
+        }
 
-        push @results, $line;
-    }
-
-    return \@results;
-}
-
-sub generateDots {
-
-    # Generate dots results from database
-
-    my $database = shift;
-    my $row = shift;
-
-    my $sth = $database->prepare("
-        SELECT target, entries, articles, citations
-        FROM dots
-        WHERE citations > 0
-        ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
-    ");
-    $sth->execute();
-
-    my @results;
-    my $rank = 0;
-
-    while (my $ref = $sth->fetchrow_hashref()) {
-
-        my $target = $ref->{'target'};
-        my $entries = $ref->{'entries'};
-        my $articles = $ref->{'articles'};
-        my $citations = $ref->{'citations'};
-
-        $rank++;
-
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
-
-        push @results, $line;
-    }
-
-    return \@results;
-}
-
-sub generateSpelling {
-
-    # Generate spelling results from database
-
-    my $database = shift;
-    my $row = shift;
-
-    my $sth = $database->prepare("
-        SELECT target, entries, articles, citations
-        FROM spellings
-        WHERE citations > 0
-        ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
-    ");
-    $sth->execute();
-
-    my @results;
-    my $rank = 0;
-
-    while (my $ref = $sth->fetchrow_hashref()) {
-
-        my $target = $ref->{'target'};
-        my $entries = $ref->{'entries'};
-        my $articles = $ref->{'articles'};
-        my $citations = $ref->{'citations'};
-
-        $rank++;
-
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
+        my $line = "{{$row|rank=$rank|target=$target|citations=$citations|articles=$articles|entries=\n$entries}}\n";
 
         push @results, $line;
     }
@@ -1088,41 +1023,6 @@ sub patternRevision {
     my $result = "m-id=$revision|r-time=" . $date->ymd;
 
     return $result;
-}
-
-sub generatePattern {
-
-    # Generate pattern results from database
-
-    my $database = shift;
-    my $row = shift;
-
-    my $sth = $database->prepare("
-        SELECT target, entries, articles, citations
-        FROM patterns
-        WHERE citations > 0
-        ORDER BY citations DESC, CAST(articles AS INTEGER) DESC, target ASC
-    ");
-    $sth->execute();
-
-    my @results;
-    my $rank = 0;
-
-    while (my $ref = $sth->fetchrow_hashref()) {
-
-        my $target = $ref->{'target'};
-        my $entries = $ref->{'entries'};
-        my $articles = $ref->{'articles'};
-        my $citations = $ref->{'citations'};
-
-        $rank++;
-
-        my $line = "{{$row|rank=$rank|target=$target|citations=$citations|articles=$articles|entries=\n$entries}}\n";
-
-        push @results, $line;
-    }
-
-    return \@results;
 }
 
 
@@ -1336,22 +1236,27 @@ if ($saveMaintenance) {
 
     # save spellings
 
-    $records = generateSpelling($database, $row);
+    $records = generateMaintenance($database, $row, 'spellings');
     saveMaintenance($bot, 'Misspellings', $top, "$bottom|$revision", $records);
 
     # save diacritics
 
-    $records = generateDiacritics($database, $row);
+    $records = generateMaintenance($database, $row, 'diacritics');
     saveMaintenance($bot, 'Diacritics', $top, "$bottom|$revision", $records);
 
     # save dots
 
-    $records = generateDots($database, $row);
+    $records = generateMaintenance($database, $row, 'dots');
     saveMaintenance($bot, 'Dots', $top, "$bottom|$revision", $records);
+
+    # save brackets
+
+    $records = generateMaintenance($database, $row, 'brackets');
+    saveMaintenance($bot, 'Brackets', $top, "$bottom|$revision", $records);
 
     # save patterns
 
-    $records = generatePattern($database, $row);
+    $records = generateMaintenance($database, $row, 'patterns');
     $revision = patternRevision($database);
     saveMaintenance($bot, 'Patterns', $top, "$bottom|$revision", $records);
 
