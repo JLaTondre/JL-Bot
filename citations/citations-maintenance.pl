@@ -67,7 +67,21 @@ my @DIACRITICS = (
     'Category:Redirects from titles without diacritics',
     'Category:Redirects from titles with diacritics'
 );
-my $ABBREVIATIONS = 'Category:Redirects from ISO 4 abbreviations';
+my @ABBREVIATIONS = (
+    'Category:Redirects from abbreviations',
+    'Category:Redirects from ISO 4 abbreviations',
+    'Category:Redirects from Bluebook abbreviations',
+    'Category:Redirects from MathSciNet abbreviations',
+    'Category:Redirects from NLM abbreviations',
+    'Category:Redirects from acronyms',
+    'Category:Redirects to acronyms',
+    'Category:Redirects from initialisms',
+    'Category:Redirects to initialisms',
+    'Category:Redirects from short names',
+    'Category:Redirects from long names',
+    'Category:Redirects from modifications',
+    'Category:Redirects from former names'
+);
 
 #
 # Subroutines
@@ -938,8 +952,12 @@ for my $nonDiacritic (keys %$diacriticBlueLinks) {
 
 # process dots based on blue links & redirects
 
-print "  retrieving members of $ABBREVIATIONS ...\n";
-my $redirects = $bot->getCategoryMembers($ABBREVIATIONS);
+my $redirects = {};
+for my $category (@ABBREVIATIONS) {
+    print "  retrieving members of $category ...\n";
+    my $local = $bot->getCategoryMembers($category);
+    $redirects = { %$redirects, %$local };
+}
 my $redirectTargets = findRedirectTargets($dbTitles, $redirects);
 
 my $dotBlueLinks = findDotCitations($dbMaintain, "existent");
