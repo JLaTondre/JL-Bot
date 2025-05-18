@@ -216,8 +216,8 @@ def queryCrossrefMembers(email, api, blocksize):
             sys.exit(1)
         else:
 
-            if r.headers['X-Rate-Limit-Interval'] != '1s':
-                print('WARNING: X-Rate-Limit-Interval changed. It is now', r.headers['X-Rate-Limit-Interval'])
+            if r.headers['x-ratelimit-interval'] != '1s':
+                print('WARNING: x-ratelimit-interval changed. It is now', r.headers['x-ratelimit-interval'])
 
             if r.status_code == 404:
                 sys.stderr.write('ERROR: 404 status code')
@@ -259,8 +259,8 @@ def queryCrossrefPrefixes(doi, email, api):
         sys.exit(1)
     else:
 
-        if r.headers['X-Rate-Limit-Interval'] != '1s':
-            print('WARNING: X-Rate-Limit-Interval changed. It is now', r.headers['X-Rate-Limit-Interval'])
+        if r.headers['x-ratelimit-interval'] != '1s':
+            print('WARNING: x-ratelimit-interval changed. It is now', r.headers['x-ratelimit-interval'])
 
         if r.status_code == 404:
             return 'NONE'
