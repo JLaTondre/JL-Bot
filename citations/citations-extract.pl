@@ -339,8 +339,10 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*lang-fa\s*\|[^\}]+\}\}//ig;            # remove {{lang-fa|remove}}
         $template =~ s/\s*\{\{\s*lang-fr\s*\|[^\}]+\}\}//ig;            # remove {{lang-fr|remove}}
         $template =~ s/\s*\{\{\s*lang-ru\s*\|[^\}]+\}\}//ig;            # remove {{lang-ru|remove}}
+        $template =~ s/\s*\{\{\s*lang-zh\s*\|[^\}]+\}\}//ig;            # remove {{lang-zh|remove}}
         $template =~ s/\s*\{\{\s*nihongo2\s*\|[^\}]+\}\}//ig;           # remove {{nihongo2|remove}}
         $template =~ s/\s*\{\{\s*korean\s*\|[^\}]+\}\}//ig;             # remove {{korean|remove}}
+        $template =~ s/\s*\{\{\s*zhi\s*\|[^\}]+\}\}//ig;                # remove {{zhi|remove}}
 
         $template =~ s/\s*\{\{\s*in lang\s*\|[^\}]+\}\}//ig;            # remove {{in lang|remove}}
 
@@ -357,6 +359,8 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*dn\s*(?:\|.*?)?\}\}//ig;                     # remove {{dn|date=...}}
         $template =~ s/\s*\{\{\s*disambiguation needed\s*(?:\|.*?)?\}\}//ig;  # remove {{disambiguation needed|date=...}}
 
+        $template =~ s/\{\{\s*usurped\s*\|\s*1\s*=\s*\[https?:[^\s]+\s+([^\]\}]+)\]?\}\}/$1/ig;   # remove {{usurped|1=[URL text]}}
+
         $template =~ s/\s*\{\{\s*specify\s*(?:\|.*?)?\}\}//ig;                # remove {{specify|reason=...}}
 
         $template =~ s/\s*\{\{\s*clarify\s*(?:\|.*?)?\}\}//ig;                # remove {{clarify|date=...}}
@@ -367,7 +371,7 @@ sub removeTemplates {
         $template =~ s/\{\{\s*ECCC\s*\|.*?\|\s*(\d+)\s*\|\s*(\d+)\s*\}\}/ECCC TR$1-$2/ig;  # remove {{ECCC|no|num|num}}
 
         $template =~ s/\{\{\s*(?:en |en|en-|n)dash\s*\}\}/–/ig;         # replace {{en dash}}
-        $template =~ s/\{\{\s*spaced (?:en |n)dash\s*\}\}/ – /ig;       # replace {{spaced en dash}}
+        $template =~ s/\{\{\s*(?:spaced (?:en |n))?dash\s*\}\}/ – /ig;  # replace {{spaced en dash}}
         $template =~ s/\{\{\s*snd\s*\}\}/ – /ig;                        # replace {{snd}}
 
         $template =~ s/\{\{\s*nbsp\s*\}\}/ /ig;                         # replace {{nbsp}}
@@ -379,6 +383,7 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*'\s*\}\}/'/ig;                            # replace {{'}}
         $template =~ s/\{\{\s*=\s*\}\}/=/ig;                            # replace {{=}}
+        $template =~ s/\{\{\s*&\s*\}\}/&/ig;                            # replace {{&}}
         $template =~ s/\{\{\s*colon\s*\}\}/:/ig;                        # replace {{colon}}
         $template =~ s/\{\{\s*!\(\s*\}\}/\[/ig;                         # replace {{!(}}
         $template =~ s/\{\{\s*\)!\s*\}\}/\]/ig;                         # replace {{)!}}
@@ -395,6 +400,7 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*subscription required\s*(?:\|.*?)?\}\}//ig;  # remove {{subscription required|remove}}
         $template =~ s/\s*\{\{\s*subscription\s*(?:\|.*?)?\}\}//ig;           # remove {{subscription|remove}}
 
+        $template =~ s/\s*\{\{\s*better source needed\s*(?:\|.*?)?\}\}//ig;            # remove {{better source needed|remove}}
         $template =~ s/\s*\{\{\s*unreliable source(?: inline)?\s*(?:\|.*?)?\}\}//ig;   # remove {{unreliable source|remove}}
 
         $template =~ s/\{\{\s*HighBeam\s*\}\}//ig;                      # remove {{HighBeam}}
