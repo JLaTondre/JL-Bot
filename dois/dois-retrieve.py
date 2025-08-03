@@ -37,6 +37,29 @@ EMAILINFO = os.environ['WIKI_CONFIG_DIR'] + '/email-info.txt'
 # Functions
 #
 
+def checkRateLimitInterval(headers, priorInterval, warning):
+
+    # Check the rate limit interval from the headers
+
+    intervalString = headers.get('x-ratelimit-interval') or headers.get('x-rate-limit-interval')
+    if intervalString is None:
+        interval = 1
+        if warning == 0:
+            print('WARNING: Rate limit interval not found in headers.')
+            warning += 1
+    else:
+        try:
+            interval = int(intervalString.rstrip('s'))
+            if interval != priorInterval:
+                print(f'WARNING: Rate limit interval has changed. It is now {intervalString}.')
+        except (ValueError, AttributeError):
+            interval = 1
+            if warning == 0:
+                print(f'WARNING: Unexpected rate limit interval format {intervalString}.')
+                warning += 1
+    return interval, warning
+
+
 def findTarget(text):
 
     # Find the target of a redirect
@@ -173,14 +196,17 @@ def queryCrossref(email, apiMembers, apiPrefixes, blocksize):
     results = {}
 
     start = 0
+    interval = 1
+    intervalWarning = 0
+
     for prefix in tqdm(members, leave=None):
         unique = set(members[prefix])
         if len(unique) > 1:
             end = time.time()
             delta = end - start
-            if delta < 1:
-                time.sleep(1 - delta)
-            registrant = queryCrossrefPrefixes(prefix, email, apiPrefixes)
+            if delta < interval:
+                time.sleep(interval - delta)
+            registrant, interval, intervalWarning = queryCrossrefPrefixes(prefix, email, apiPrefixes, interval, intervalWarning)
             start = time.time()
         else:
             registrant = members[prefix][0]
@@ -201,6 +227,9 @@ def queryCrossrefMembers(email, api, blocksize):
     offset = 0
     total = 1
 
+    interval = 1
+    intervalWarning = 0
+
     while offset < total:
 
         start = time.time()
@@ -216,8 +245,7 @@ def queryCrossrefMembers(email, api, blocksize):
             sys.exit(1)
         else:
 
-            if r.headers['x-ratelimit-interval'] != '1s':
-                print('WARNING: x-ratelimit-interval changed. It is now', r.headers['x-ratelimit-interval'])
+            interval, intervalWarning = checkRateLimitInterval(r.headers, interval, intervalWarning)
 
             if r.status_code == 404:
                 sys.stderr.write('ERROR: 404 status code')
@@ -240,15 +268,15 @@ def queryCrossrefMembers(email, api, blocksize):
 
             end = time.time()
             delta = end - start
-            if delta < 1:
-                time.sleep(1 - delta)
+            if delta < interval:
+                time.sleep(interval - delta)
 
             offset += blocksize
 
     return results
 
 
-def queryCrossrefPrefixes(doi, email, api):
+def queryCrossrefPrefixes(doi, email, api, priorInterval, intervalWarning):
 
     # Retrieve registrant name from Crossref
 
@@ -259,8 +287,7 @@ def queryCrossrefPrefixes(doi, email, api):
         sys.exit(1)
     else:
 
-        if r.headers['x-ratelimit-interval'] != '1s':
-            print('WARNING: x-ratelimit-interval changed. It is now', r.headers['x-ratelimit-interval'])
+        interval, intervalWarning = checkRateLimitInterval(r.headers, priorInterval, intervalWarning)
 
         if r.status_code == 404:
             return 'NONE'
@@ -282,7 +309,7 @@ def queryCrossrefPrefixes(doi, email, api):
             sys.stderr.write('ERROR: name not found for ' + doi + '\n' + r.text + '\n')
             sys.exit(1)
 
-        return name
+        return name, interval, intervalWarning
 
 
 def queryWikipediaCrossref(title, site):
