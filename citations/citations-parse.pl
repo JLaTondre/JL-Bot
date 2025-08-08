@@ -620,6 +620,11 @@ while (my ($title, $text) = $pages->next) {
         ($text =~ /^$pDoi/)
     );
 
+    # replace #invoke cite with equivalent template
+
+    $text =~ s/\{\{\s*#invoke:\s*cite\s*\|\s*citation\s*\|/\{\{citation\|/ig;
+    $text =~ s/\{\{\s*#invoke:\s*cite\s*\|\s*([^|]+)/\{\{citation $1/ig;
+
     # check for and process templates
 
     my $templates = findTemplates($text);
