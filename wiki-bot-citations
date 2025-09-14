@@ -110,6 +110,7 @@ cd $WIKI_WORKING_DIR
 if [ -n "$ALPHABET" ]
 then
     TIMESTAMP=$(date +"%d%H%M%S")
+    outputTable db-citations.sqlite3 x-citations-$TIMESTAMP citations 'type, citation, article, count'
     outputTable db-individual.sqlite3 x-individual-$TIMESTAMP individuals 'type, letter, citation, target'
     outputTable db-common.sqlite3 x-common-$TIMESTAMP commons 'type, target, citations DESC, articles DESC'
     outputTable db-specific.sqlite3 x-questionables-$TIMESTAMP questionables 'target, citations DESC, articles DESC'
