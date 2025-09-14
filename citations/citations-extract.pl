@@ -129,78 +129,116 @@ sub extractField {
 
     my $citation = shift;
 
-    $citation =~ s/<!--(?:(?!<!--).)*?-->//sg;               # remove comments
+    # strip outer braces and template name
+    $citation =~ s/^\s*\{\{\s*[^|]+?\s*\|//;
+    $citation =~ s/\}\}\s*$//;
 
-    $citation =~ s/_/ /g;                                    # ensure spaces (wiki syntax)
-    $citation =~ s/&nbsp;/ /g;                               # ensure spaces (non-breaking)
-    $citation =~ s/\xA0/ /g;                                 # ensure spaces (non-breaking)
-    $citation =~ s/<br\s*\/?>/ /g;                           # ensure spaces (breaks)
-    $citation =~ s/\t/ /g;                                   # ensure spaces (tabs)
-    $citation =~ s/\s{2,}/ /g;                               # ensure only single space
+    # remove comments
+    $citation =~ s/<!--(?:(?!<!--).)*?-->//sg;
 
-    $citation =~ s/\[\[[^\|\]]+\|\s*([^\]]+)\s*\]\]/$1/g;                   # remove link from [[link|text]]
-    $citation =~ s/\[\[[^\|\]]+\|\s*([^\[\]]*\[[^\]]+\][^\]]*)\s*\]\]/$1/g; # remove link from [[link|text [text] text]]
-    $citation =~ s/\[\[[^\{\]]*\s*\{\{\s*!\s*\}\}\s*([^\]]+)\]\]/$1/g;      # remove link from [[link{{!}}text]]
-    $citation =~ s/\[\[\s*([^\]]+)\s*\]\]/$1/g;                             # remove link from [[text]]
+    # replace nowiki
+    my @nowikiStash;
+    my $nowikiCount = 0;
+    my $nowikiRe = qr{
+        <\s*nowiki\s*>(.*?)<\s*\/\s*nowiki\s*>
+    }isx;
+    $citation =~ s/$nowikiRe/
+        push @nowikiStash, $&;
+        "\x01NOWIKI" . (++$nowikiCount) . "\x02";
+    /gse;
 
-    $citation =~ s/\{\{\s*subst:/{{/g;                       # remove subst:
+    # utilize a tokenizer to split the citation into parts
+    my $fields;
+    my @parts;
+    my $current = '';
+    my $depth_curly = 0;
+    my $depth_square = 0;
 
-    $citation =~ s/\{\{\s*Q\s*\|([^\}]+)\}\}/==WIKIDATA==$1==WIKIDATA==/ig;     # keep {{Q|text}}
+    my @chars = split //, $citation;
+    for (my $i = 0; $i < @chars; $i++) {
+        my $char = $chars[$i];
+        my $next = $chars[$i + 1] // '';
 
-    $citation =~ s/\s*\(\s*\{\{\s*langx\s*\|[^\}]+\}\}\s*\)//ig;                # remove ({{langx|remove}}) - in parenthesis needs to be done at this level
+        # track nesting
+        if ($char eq '{' && $next eq '{') {
+            $depth_curly++;
+            $current .= $char;
+        }
+        elsif ($char eq '}' && $next eq '}') {
+            $depth_curly-- if $depth_curly > 0;
+            $current .= $char;
+        }
+        elsif ($char eq '[' && $next eq '[') {
+            $depth_square++;
+            $current .= $char;
+        }
+        elsif ($char eq ']' && $next eq ']') {
+            $depth_square-- if $depth_square > 0;
+            $current .= $char;
+        }
+        elsif ($char eq '|' && $depth_curly == 0 && $depth_square == 0) {
+            push @parts, $current;
+            $current = '';
+        } else {
+            $current .= $char;
+        }
+    }
+    push @parts, $current if $current ne '';
 
-    $citation = removeTemplates($citation);
+    foreach my $part (@parts) {
+        $part =~ s/^\s+|\s+$//g;
+        if ($part =~ /^([^=]+?)\s*=\s*(.+)$/s) {
+            my ($key, $value) = ($1, $2);
+            $key =~ s/^\s+|\s+$//g;
+            $key = lc $key;
 
-    my $results;
+            # only keep journal or magazine fields
+            next unless $key eq 'journal' || $key eq 'magazine';
 
-    while ($citation =~ /\|\s*(journal|magazine)\s*=\s*(.*?)\s*(?=\||\}\}$)/ig) {
+            if ($value =~ /\{\{/) {
+                $value = removeTemplates($value);
+            }
 
-        my $type  = lcfirst $1;
-        my $field = $2;
+            # restore <nowiki>
+            $value =~ s/\x01NOWIKI(\d+)\x02/$nowikiStash[$1-1]/ge;
 
-        $field =~ s/\{\{\s*!\s*\}\}/|/ig;                     # replace {{!}} - while template, needs to be after field extraction
-        $field =~ s/\{\{\s*pipe\s*\}\}/\|/ig;                 # replace {{pipe}}
+            $value =~ s/_/ /g;                                  # ensure spaces (wiki syntax)
+            $value =~ s/&nbsp;/ /g;                             # ensure spaces (non-breaking)
+            $value =~ s/\xA0/ /g;                               # ensure spaces (non-breaking)
+            $value =~ s/<br\s*\/?>/ /g;                         # ensure spaces (breaks)
+            $value =~ s/\t/ /g;                                 # ensure spaces (tabs)
+            $value =~ s/\s{2,}/ /g;                             # ensure only single space
 
-        $field =~ s/<html_ent glyph="\@amp;" ascii="&amp;"\/>/&/ig;  # replace <html_ent glyph="@amp;" ascii="&amp;"/>
+            $value =~ s/\[\[(?:\s*:[a-zA-Z]{2}:)?[^\|\]]+\|\s*([^\]]+)\s*\]\]/$1/g;  # remove link from [[:en:link|text]]
+            $value =~ s/\[\[(?:\s*:[a-zA-Z]{2}:)?\s*([^\]]+?)\s*\|?\]\]/$1/g;        # remove link from [[:en:text]]
 
-        $field =~ s/\[\s*https?:[^\s\]]+\]//g;                # remove [http://link]
-        $field =~ s/\[\s*https?:[^\s]+\s+([^\]]+)\]/$1/g;     # remove link from [http://link text]
+            $value =~ s/\[\s*https?:[^\s\]]+\]//g;              # remove [http://link]
+            $value =~ s/\[\s*https?:[^\s]+\s+([^\]]+)\]/$1/g;   # remove link from [http://link text]
 
-        $field =~ s/<abbr\s.*?>(.*?)<\/abbr\s*>/$1/ig;        # remove <abbr ...>text</abbr>
-        $field =~ s/<span\s.*?>(.*?)<\/span\s*>/$1/ig;        # remove <span ...>text</span>
+            $value =~ s/<abbr\s.*?>(.*?)<\/abbr\s*>/$1/ig;      # remove <abbr ...>text</abbr>
+            $value =~ s/<span\s.*?>(.*?)<\/span\s*>/$1/ig;      # remove <span ...>text</span>
+            $value =~ s/<cite\s.*?>(.*?)<\/cite\s*>/$1/ig;      # remove <cite ...>text</cite>
+            $value =~ s/<sup>\s*([^\<]+)?\s*<\/sup>/$1/g;       # remove <sub>text</sub>
+            $value =~ s/<small>\s*([^\<]+)?\s*<\/small>/$1/g;   # remove <small>text</small>
+            $value =~ s/<nowiki>\s*([^\<]+)\s*<\/nowiki>/$1/g;  # remove <nowiki>text</nowiki>
 
-        $field =~ s/<cite id=["'][^"']+["']\s*>\s*(.*?)\s*<\/cite\s*>/$1/ig;  # remove <cite id="id">text</cite>
+            $value = decode_entities($value);                   # decode HTML entities (&amp; etc)
 
-        $field =~ s/^\s*''(.*)''\s'''(.*)'''\s*$/$1 $2/g;     # handle special case ''text'' '''text'''
+            $value =~ s/^\s*'{1,5}(.*?)'{1,5}$/$1/g;            # remove single quotes, italics, and bold
+            $value =~ s/^\s*[\"“](.*?)[\"”]$/$1/g;              # remove quotes (regular & irregular)
 
-        $field =~ s/<sup>\s*([^\<]+)?\s*<\/sup>/$1/g;         # remove <sub>text</sub>
-        $field =~ s/<small>\s*([^\<]+)?\s*<\/small>/$1/g;     # remove <small>text</small>
+            $value =~ s/\s*\(\)$//g;                            # remove () at end
 
-        $field =~ s/<nowiki>\s*([^\<]+)\s*<\/nowiki>/$1/g;    # remove <nowiki>text</nowiki>
+            $value =~ s/^\s+|\s+$//g;                           # trim leading/trailing spaces
 
-        $field = decode_entities($field);                     # decode HTML entities (&amp; etc)
+            # skip if results in nothing (ex. comment only)
+            next unless ($value);
 
-        $field =~ s/^\s*'{1,5}(.*?)'{1,5}$/$1/g;              # remove single quotes, italics, and bold
-        $field =~ s/^\s*[\"“](.*?)[\"”]$/$1/g;                # remove quotes (regular & irregular)
-
-        $field =~ s/\s*\(\)//g;                               # remove ()
-
-        $field =~ s/\s+'+$//;                                 # remove '' at end
-
-        $field =~ s/^\s+//;                                   # remove space at start
-        $field =~ s/\s+$//;                                   # remove space at end
-
-        $field =~ s/^:\s*//;                                  # remove : at start
-
-        # skip if results in nothing (ex. comment only)
-
-        next if ($field =~ /^\s*$/);
-        next if ($field =~ /^\s*\.\s*$/);
-
-        $results->{$type} = $field;
+            $fields->{$key} = $value;
+        }
     }
 
-    return $results;
+    return $fields;
 }
 
 sub findDoiLimit {
@@ -275,74 +313,72 @@ sub removeTemplates {
 
     my $citation = shift;
 
+    $citation =~ s/\{\{\s*subst:/{{/g;                                  # remove subst:
+
     my $templates = findTemplates($citation);
 
     for my $template (@$templates) {
-        next if ($template eq $citation);                               # don't process whole thing
 
         my $start = $template;
 
         # several of these could be collapsed (conditional, or) but are left separate for simplicity | readability
 
-        $template =~ s/\{\{\s*URL\s*\|[^\|]+\|\s*(.+?)\s*\}\}/$1/g;     # remove link from {{URL|link|text}}
+        $template =~ s/\s*\{\{\s*dead ?link\s*(?:\|.*?)?\}\}//ig;               # remove {{dead link|date=...}}
+        $template =~ s/\s*\{\{\s*cbignore\s*(?:\|.*?)?\}\}//ig;                 # remove {{cbignore|bot=...|}}
 
-        $template =~ s/\s*\{\{\s*dead ?link\s*(?:\|.*?)?\}\}//ig;       # remove {{dead link|date=...}}
-        $template =~ s/\s*\{\{\s*cbignore\s*(?:\|.*?)?\}\}//ig;         # remove {{cbignore|bot=...|}}
+        while ($template =~ s/(\{\{\s*abbrv?(?=\s*[|}])[^{}]*?)\|\s*(?!1\s*=)[^|=\s]+(?:\s*=\s*)[^|}]*(?=\||\}\})/$1/ig) {} # remove non-1= parameters
+        $template =~ s/\{\{\s*abbrv?(?=\s*[|}])[^}]*?\|\s*1\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;                                  # replace {{abbrv|...|1=text|...}}
+        $template =~ s/\{\{\s*abbrv?(?=\s*[|}])[^}]*?\|\s*([^|}]+)[^}]*\}\}/$1/ig;                                          # replace {{abbrv|text|...}}
 
-        $template =~ s/\{\{\s*abbr\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;       # remove {{abbr|text|...}}
-        $template =~ s/\{\{\s*sup\s*\|([^\}]+)\}\}/$1/ig;               # remove {{sup|text}}
-        $template =~ s/\{\{\s*title case\s*\|([^\}]+)\}\}/$1/ig;        # remove {{title case|text}}
+        $template =~ s/\{\{\s*sup\s*\|([^\}]+)\}\}/$1/ig;                       # replace {{sup|text}}
+        $template =~ s/\{\{\s*title case\s*\|([^\}]+)\}\}/$1/ig;                # replace {{title case|text}}
 
-        $template =~ s/\{\{\s*not a typo\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;   # remove {{not a typo|text|text}}
-        $template =~ s/\{\{\s*not a typo\s*\|([^\}]+)\}\}/$1/ig;               # remove {{not a typo|text}}
+        $template =~ s/\{\{\s*not a typo\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;    # replace {{not a typo|text|text}}
+        $template =~ s/\{\{\s*not a typo\s*\|([^\}]+)\}\}/$1/ig;                # replace {{not a typo|text}}
 
-        $template =~ s/\{\{\s*as written\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;   # remove {{as written|text|text}}
-        $template =~ s/\{\{\s*as written\s*\|([^\}]+)\}\}/$1/ig;               # remove {{as written|text}}
+        $template =~ s/\{\{\s*as written\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;    # replace {{as written|text|text}}
+        $template =~ s/\{\{\s*as written\s*\|([^\}]+)\}\}/$1/ig;                # replace {{as written|text}}
 
-        $template =~ s/\{\{\s*text\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;         # remove {{text|text|text}}
-        $template =~ s/\{\{\s*text\s*\|([^\}]+)\}\}/$1/ig;                     # remove {{text|text}}
+        $template =~ s/\{\{\s*text\s*\|([^\|]+)\|([^\}]+)\}\}/$1$2/ig;          # replace {{text|text|text}}
+        $template =~ s/\{\{\s*text\s*\|([^\}]+)\}\}/$1/ig;                      # replace {{text|text}}
 
-        $template =~ s/\{\{\s*convert\s*\|([^\|]+)\|([^\|]+)(?:\|.+)?\}\}/$1 $2/ig;    # remove {{convert|text|text|remove}}
+        $template =~ s/\{\{\s*wikiLeaks cable\s*\|(?:id=)?(.+)\}\}/WikiLeaks cable: $1/ig;          # replace {{wikiLeaks cable|id=text|}}
 
-        $template =~ s/\{\{\s*annotated link\s*\|([^\}\|]+).*?\}\}/$1/ig;;     # remove {{annotated link|text|...}}
-        $template =~ s/\{\{\s*link if exists\s*\|([^\}]+)\}\}/$1/ig;           # remove {{as written|text}}
+        $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;     # replace {{transl|no|no|text|...}}
+        $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;             # replace {{transl|no|text|...}}
 
-        $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;   # remove {{transl|no|no|text|...}}
-        $template =~ s/\{\{\s*transl(?:iteration)?\s*\|[^\|]*\|([^\}\|]+).*?\}\}/$1/ig;           # remove {{transl|no|text|...}}
+        $template =~ s/\{\{\s*illm?\s*\|[^\}\|]+\{\{\s*!\s*\}\}\s*([^\}\|]+).*?\}\}/$1/ig;                              # replace {{ill|remove{{!}}text|...}}
+        $template =~ s/\{\{\s*interlanguage(?: link(?: multi)?)?\s*\|[^\}\|]+\{\{\s*!\s*\}\}\s*([^\}\|]+).*?\}\}/$1/ig; # replace {{interlanguage link|remove{{!}}text|...}}
+        $template =~ s/\{\{\s*link-interwiki\s*\|[^\}\|]+\{\{\s*!\s*\}\}\s*([^\}\|]+).*?\}\}/$1/ig;                     # replace {{link-interwiki|remove{{!}}text|...}}
 
-        $template =~ s/\{\{\s*illm?\s*\|[^\}\|]+\{\{\s*!\s*\}\}\s*([^\}\|]+).*?\}\}/$1/ig;        # remove {{ill|remove{{!}}text|...}}
+        $template =~ s/\{\{\s*illm?.*?\|[^\}]*lt\s*=\s*([^\}\|]+).*?\}\}/$1/ig;                                 # replace {{ill|...|lt=text|...}}
+        $template =~ s/\{\{\s*interlanguage(?: link(?: multi)?)?\s*\|[^\}]*lt\s*=\s*([^\}\|]+).*?\}\}/$1/ig;    # replace {{interlanguage link|...|lt=text|...}}
+        $template =~ s/\{\{\s*link-interwiki\|[^\}]*lt\s*=\s*([^\}\|]+).*?\}\}/$1/ig;                           # replace {{link-interwiki|...|lt=text|...}}
 
-        $template =~ s/\{\{\s*illm?.*?\|\s*lt\s*=\s*([^\}\|]+).*?\}\}/$1/ig;                            # remove {{ill|...|lt=text|...}}
-        $template =~ s/\{\{\s*interlanguage link(?: multi)?.*?\|\s*lt\s*=\s*([^\}\|]+).*?\}\}/$1/ig;    # remove {{interlanguage link|...|lt=text|...}}
+        $template =~ s/\{\{\s*illm?\s*\|([^\}\|]+).*?\}\}/$1/ig;                                    # replace {{ill|text|...}}
+        $template =~ s/\{\{\s*interlanguage(?: link(?: multi)?)?\s*\|([^\}\|]+).*?\}\}/$1/ig;       # replace {{interlanguage link|text|...}}
+        $template =~ s/\{\{\s*link-interwiki\s*\|([^\}\|]+).*?\}\}/$1/ig;                           # replace {{link-interwiki|text|...}}
 
-        $template =~ s/\{\{\s*illm?\s*\|([^\}\|]+).*?\}\}/$1/ig;                                  # remove {{ill|text|...}}
-        $template =~ s/\{\{\s*interlanguage link(?: multi)?\s*\|([^\}\|]+).*?\}\}/$1/ig;          # remove {{interlanguage link|text|...}}
-        $template =~ s/\{\{\s*link-interwiki\s*\|(?:[^e\|]*)\s*en\s*=\s*([^\}\|]+).*?\}\}/$1/ig;  # remove {{link-interwiki|en=text|...}}
+        while ($template =~ s/(\{\{\s*langx?(?=\s*[|}])[^{}]*?)\|\s*(?!(?:2|text)\s*=)[^|=\s]+(?:\s*=\s*)[^|}]*(?=\||\}\})/$1/ig) {}    # remove non-(2|text)= parameters
+        $template =~ s/\{\{\s*langx?(?=\s*[|}])[^}]*?\|\s*(?:2|text)\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;                                     # replace {{lang|...|(2|text)=text|...}}
+        $template =~ s/\{\{\s*langx?\s*\|[^\|]+\|\s*([^\}]+)\}\}/$1/ig;                                                                 # replace {{lang|...|text|...}}
 
-        $template =~ s/\{\{\s*iw2?\s*\|([^\}\|]+).*?\}\}/$1/ig;         # remove {{iw2|text|...}}
+        while ($template =~ s/(\{\{\s*nihongo2?(?=\s*[|}])[^{}]*?)\|\s*(?![13]\s*=)[^|=\s]+(?:\s*=\s*)[^|}]*(?=\||\}\})/$1/ig) {}   # remove non-(1|3)= parameters
+        $template =~ s/\{\{\s*nihongo2?(?=\s*[|}])[^}]*?\|\s*1\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;                                       # replace {{nihongo|...|1=text|...}}
+        $template =~ s/\{\{\s*nihongo2?(?=\s*[|}])[^}]*?\|\s*3\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;                                       # replace {{nihongo|...|3=text|...}}
+        $template =~ s/\{\{\s*nihongo(?=\s*[|}])[^}]*?\|\s*(?=\|)\|[^|}]*\|\s*([^|}]+)[^}]*\}\}/$1/ig;                              # replace {{nihongo||..|text|...}} (no nihongo2 for this one, but needs to be before next)
+        $template =~ s/\{\{\s*nihongo2?(?=\s*[|}])[^}]*?\|\s*([^|}]+)[^}]*\}\}/$1/ig;                                               # replace {{nihongo|text|...}}
 
-        $template =~ s/\{\{\s*lang\s*\|[^\|]+\|([^\}]+)\}\}/$1/ig;      # remove {{lang|ln|text}}
-        $template =~ s/\{\{\s*nihongo\s*\|([^\}\|]+)(?:\|.*?)?\}\}/$1/ig;       # remove {{nihongo|text|...}}
-        $template =~ s/\{\{\s*nihongo krt\s*\|([^\}\|]+)(?:\|.*?)?\}\}/$1/ig;   # remove {{nihongo krt|text|...}}
-        $template =~ s/\{\{\s*nihongo\s*\|\|([^\\|}]+)\|.*?\}\}/$1/ig;  # remove {{nihongo||text|...}}
-        $template =~ s/\{\{\s*zh\s*(?:\|[^\|]*)*\|l=([^\|\}]+)/$1/ig;   # remove {{zh|l=text}}
+        $template =~ s/\{\{\s*nihongo krt(?=\s*[|}])[^}]*?\|\s*2\s*=\s*([^|}]+)[^}]*\}\}/$1/ig; # replace {{nihongo krt|...|2=text|...}}
+        $template =~ s/\{\{\s*nihongo krt\s*\|[^|]*\|\s*([^|}]+)[^}]*\}\}/$1/ig;                # replace {{nihongo krt|...|text|...}}
 
-        $template =~ s/\{\{\s*wikiLeaks cable\s*\|(?:id=)?(.+)\}\}/WikiLeaks cable: $1/ig;    # remove {{wikiLeaks cable|id=text|}}
+        while ($template =~ s/(\{\{\s*(?:lang-)?zhi?(?=\s*[|}])[^{}]*?)\|\s*[^|=\s]+(?:\s*=\s*)[^|}]*(?=\||\}\})/$1/ig) {}  # remove named parameters
+        $template =~ s/\{\{\s*(?:lang-)?zhi?(?=\s*[|}])[^|}]*\|\s*([^|}]+)[^}]*\}\}/$1/ig;                                  # replace {{lang-zh|text|...}}
+        $template =~ s/\{\{\s*(?:lang-)?zhi?(?=\s*[|}])[^}]*\}\}//ig;                                                       # remove {{lang-zh}} (no parameters remaining)
 
-        $template =~ s/\{\{\s*langx\s*(?:\|[^\|]*)*\|lit=([^\|\}]+)/$1/ig;          # remove {{langx|lit=text}}
-        $template =~ s/\{\{\s*langx\s*(?:\|[^\|]*)*\|translation=([^\|\}]+)/$1/ig;  # remove {{langx|translation=text}}
-        $template =~ s/\s*\{\{\s*langx\s*\|[^\}]+\}\}//ig;                          # remove {{langx|remove}}
-
-        # should the text be removed or kept?
-        $template =~ s/\s*\{\{\s*lang-el\s*\|[^\}]+\}\}//ig;            # remove {{lang-el|remove}}
-        $template =~ s/\s*\{\{\s*lang-en\s*\|[^\}]+\}\}//ig;            # remove {{lang-en|remove}}
-        $template =~ s/\s*\{\{\s*lang-fa\s*\|[^\}]+\}\}//ig;            # remove {{lang-fa|remove}}
-        $template =~ s/\s*\{\{\s*lang-fr\s*\|[^\}]+\}\}//ig;            # remove {{lang-fr|remove}}
-        $template =~ s/\s*\{\{\s*lang-ru\s*\|[^\}]+\}\}//ig;            # remove {{lang-ru|remove}}
-        $template =~ s/\s*\{\{\s*lang-zh\s*\|[^\}]+\}\}//ig;            # remove {{lang-zh|remove}}
-        $template =~ s/\s*\{\{\s*nihongo2\s*\|[^\}]+\}\}//ig;           # remove {{nihongo2|remove}}
-        $template =~ s/\s*\{\{\s*korean\s*\|[^\}]+\}\}//ig;             # remove {{korean|remove}}
-        $template =~ s/\s*\{\{\s*zhi\s*\|[^\}]+\}\}//ig;                # remove {{zhi|remove}}
+        $template =~ s/\{\{\s*korean\s*?\|\s*hangul\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;                              # replace {{korean|hangul=text|...}}
+        $template =~ s/\{\{\s*korean\s*\|\s*labels\s*=\s*no\b\s*\|\s*([^|=}][^|}]*)[^}]*\}\}/$1/ig;             # replace {{korean|labels=no|text|...}}
+        $template =~ s/\{\{\s*korean\s*(?=[^}]*\|\s*labels\s*=\s*no\b)\s*\|\s*([^|=}][^|}]*)[^}]*\}\}/$1/ig;    # replace {{korean|...|labels=no|text|...}}
 
         $template =~ s/\s*\{\{\s*in lang\s*\|[^\}]+\}\}//ig;            # remove {{in lang|remove}}
 
@@ -351,28 +387,32 @@ sub removeTemplates {
 
         $template =~ s/\{\{\s*pi\s*\}\}/π/ig;                           # replace {{pi}}
 
-        $template =~ s/\{\{\s*Ordinal\s*\|\s*1\s*\}\}/1st/ig;           # replace {{Ordinal|1}}
-        $template =~ s/\{\{\s*Ordinal\s*\|\s*2\s*\}\}/2nd/ig;           # replace {{Ordinal|2}}
-        $template =~ s/\{\{\s*Ordinal\s*\|\s*3\s*\}\}/3rd/ig;           # replace {{Ordinal|3}}
-        $template =~ s/\{\{\s*Ordinal\s*\|\s*([4-9])\s*\}\}/$1th/ig;    # replace {{Ordinal|4}}
+        $template =~ s/\{\{\s*ordinal\s*\|\s*1\s*\}\}/1st/ig;           # replace {{ordinal|1}}
+        $template =~ s/\{\{\s*ordinal\s*\|\s*2\s*\}\}/2nd/ig;           # replace {{ordinal|2}}
+        $template =~ s/\{\{\s*ordinal\s*\|\s*3\s*\}\}/3rd/ig;           # replace {{ordinal|3}}
+        $template =~ s/\{\{\s*ordinal\s*\|\s*([4-9])\s*\}\}/$1th/ig;    # replace {{ordinal|4}}
 
-        $template =~ s/\s*\{\{\s*dn\s*(?:\|.*?)?\}\}//ig;                     # remove {{dn|date=...}}
-        $template =~ s/\s*\{\{\s*disambiguation needed\s*(?:\|.*?)?\}\}//ig;  # remove {{disambiguation needed|date=...}}
+        $template =~ s/\{\{\s*convert\s*\|\s*(\d+)\s*\|\s*F\s*\}\}/$1 °F/ig;    # replace {{convert|text|F}}
 
-        $template =~ s/\{\{\s*usurped\s*\|\s*1\s*=\s*\[https?:[^\s]+\s+([^\]\}]+)\]?\}\}/$1/ig;   # remove {{usurped|1=[URL text]}}
+        $template =~ s/\s*\{\{\s*dn\s*(?:\|.*?)?\}\}//ig;                       # remove {{dn|date=...}}
+        $template =~ s/\s*\{\{\s*disambiguation needed\s*(?:\|.*?)?\}\}//ig;    # remove {{disambiguation needed|date=...}}
 
-        $template =~ s/\s*\{\{\s*specify\s*(?:\|.*?)?\}\}//ig;                # remove {{specify|reason=...}}
+        $template =~ s/\{\{\s*usurped\s*\|\s*1\s*=\s*\[https?:[^\s]+\s+([^\]\}]+)\]?\}\}/$1/ig;   # replace {{usurped|1=[URL text]}}
 
-        $template =~ s/\s*\{\{\s*clarify\s*(?:\|.*?)?\}\}//ig;                # remove {{clarify|date=...}}
-        $template =~ s/\s*\{\{\s*full citation needed\s*(?:\|.*?)?\}\}//ig;   # remove {{full citation needed|date=...}}
+        $template =~ s/\s*\{\{\s*specify\s*(?:\|.*?)?\}\}//ig;          # remove {{specify|reason=...}}
 
-        $template =~ s/\s*\{\{\s*date\s*(?:\|.*?)?\}\}//ig;                    # remove {{date|remove}}
+        $template =~ s/\s*\{\{\s*clarify\s*(?:\|.*?)?\}\}//ig;              # remove {{clarify|date=...}}
+        $template =~ s/\s*\{\{\s*full citation needed\s*(?:\|.*?)?\}\}//ig; # remove {{full citation needed|date=...}}
 
-        $template =~ s/\{\{\s*ECCC\s*\|.*?\|\s*(\d+)\s*\|\s*(\d+)\s*\}\}/ECCC TR$1-$2/ig;  # remove {{ECCC|no|num|num}}
+        $template =~ s/\s*\{\{\s*date\s*(?:\|.*?)?\}\}//ig;             # remove {{date|remove}}
+
+        $template =~ s/\{\{\s*ECCC\s*\|.*?\|\s*(\d+)\s*\|\s*(\d+)\s*\}\}/ECCC TR$1-$2/ig;  # replace {{ECCC|no|num|num}}
 
         $template =~ s/\{\{\s*(?:en |en|en-|n)dash\s*\}\}/–/ig;         # replace {{en dash}}
         $template =~ s/\{\{\s*(?:spaced (?:en |n))?dash\s*\}\}/ – /ig;  # replace {{spaced en dash}}
         $template =~ s/\{\{\s*snd\s*\}\}/ – /ig;                        # replace {{snd}}
+
+        $template =~ s/\{\{\s*em ?dash\s*\}\}/—/ig;                     # replace {{em dash}}
 
         $template =~ s/\{\{\s*nbsp\s*\}\}/ /ig;                         # replace {{nbsp}}
 
@@ -412,17 +452,17 @@ sub removeTemplates {
         $template =~ s/\s*\{\{\s*ISSN\s*\|([^\}]+)\}\}//ig;             # remove {{ISSN|remove}}
         $template =~ s/\s*\{\{\s*JSTOR(?:\s*\|([^\}]+))?\}\}//ig;       # remove {{JSTOR|remove}}
 
-        $template =~ s/\{\{\s*nobr\s*\|([^\}]+)\}\}/$1/ig;              # remove {{nobr|text}}
-        $template =~ s/\{\{\s*normal\s*\|([^\}]+)\}\}/$1/ig;            # remove {{normal|text}}
-        $template =~ s/\{\{\s*nowrap\s*\|([^\}]+)\}\}/$1/ig;            # remove {{nowrap|text}}
-        $template =~ s/\{\{\s*noitalic\s*\|([^\}]+)\}\}/$1/ig;          # remove {{noitalic|text}}
-        $template =~ s/\{\{\s*small\s*\|([^\}]+)\}\}/$1/ig;             # remove {{small|text}}
-        $template =~ s/\{\{\s*smallcaps\s*\|([^\}]+)\}\}/$1/ig;         # remove {{smallcaps|text}}
+        $template =~ s/\{\{\s*nobr\s*\|([^\}]+)\}\}/$1/ig;              # replace {{nobr|text}}
+        $template =~ s/\{\{\s*normal\s*\|([^\}]+)\}\}/$1/ig;            # replace {{normal|text}}
+        $template =~ s/\{\{\s*nowrap\s*\|([^\}]+)\}\}/$1/ig;            # replace {{nowrap|text}}
+        $template =~ s/\{\{\s*noitalic\s*\|([^\}]+)\}\}/$1/ig;          # replace {{noitalic|text}}
+        $template =~ s/\{\{\s*small\s*\|([^\}]+)\}\}/$1/ig;             # replace {{small|text}}
+        $template =~ s/\{\{\s*smallcaps\s*\|([^\}]+)\}\}/$1/ig;         # replace {{smallcaps|text}}
 
-        $template =~ s/\{\{\s*gr[ae]y\s*\|([^\}]+)\}\}/$1/ig;           # remove {{gray|text}}
+        $template =~ s/\{\{\s*gr[ae]y\s*\|([^\}]+)\}\}/$1/ig;           # replace {{gray|text}}
 
-        $template =~ s/\{\{\s*lcfirst:\s*(.)([^\}]+)\}\}/\l$1$2/ig;     # remove {{lcfirst:text}} where first letter of kept text is converted to lowercase
-        $template =~ s/\{\{\s*ucfirst:\s*(.)([^\}]+)\}\}/\u$1$2/ig;     # remove {{ucfirst:text}} where first letter of kept text is converted to uppercase
+        $template =~ s/\{\{\s*lcfirst:\s*(.)([^\}]+)\}\}/\l$1$2/ig;     # replace {{lcfirst:text}} where first letter of kept text is converted to lowercase
+        $template =~ s/\{\{\s*ucfirst:\s*(.)([^\}]+)\}\}/\u$1$2/ig;     # replace {{ucfirst:text}} where first letter of kept text is converted to uppercase
 
         $template =~ s/\s*\{\{\s*\^\s*\|([^\}]+)\}\}//ig;               # remove {{^|remove}}
         $template =~ s/\s*\{\{\s*void\s*\|([^\}]+)\}\}//ig;             # remove {{void|remove}}
@@ -430,21 +470,29 @@ sub removeTemplates {
         $template =~ s/\{\{\s*chem\s*\|\s*CO\s*\|\s*2\s*\}\}/CO2/ig;    # replace {{chem|CO|2}}
         $template =~ s/\s*\{\{\s*CO2\s*(?:\|.*?)?\}\}/CO2/ig;           # replace {{CO2|...}}
 
-        $template =~ s/\{\{\s*w\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;          # remove {{w|text|...}}
-        $template =~ s/\{\{\s*w\s*\|([^\}]+)\}\}/$1/ig;                 # remove {{w|text}}
+        $template =~ s/\{\{\s*w\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;          # replace {{w|text|...}}
+        $template =~ s/\{\{\s*w\s*\|([^\}]+)\}\}/$1/ig;                 # replace {{w|text}}
 
-        $template =~ s/\{\{\s*linktext\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;   # remove {{linktext|text|...}}
-        $template =~ s/\{\{\s*no ?italics?\s*\|([^\}]+)\}\}/$1/ig;      # remove {{noitalic|text}}
+        $template =~ s/\{\{\s*annotated link(?=\s*[|}])[^}]*?\|\s*(?:2|disp(?:lay)?)\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;         # replace {{annotated link|...|(2|display)=text|...}}
+        while ($template =~ s/(\{\{\s*annotated link(?=\s*[|}])[^{}]*?)\|\s*[^|=\s]+(?:\s*=\s*)[^|}]*(?=\||\}\})/$1/ig) {}  # remove named parameters
+        $template =~ s/\{\{\s*annotated link\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;                                              # replace {{annotated link|...|text}}
+        $template =~ s/\{\{\s*annotated link\s*\|([^\}]+)\}\}/$1/ig;                                                        # replace {{annotated link|text}}
 
-        $template =~ s/\{\{\s*no self link\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;  # remove {{not a typo|remove|text}}
-        $template =~ s/\{\{\s*no self link\s*\|([^\}]+)\}\}/$1/ig;            # remove {{not a typo|text}}
-        $template =~ s/\{\{\s*nsl\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;           # remove {{not a typo|remove|text}}
-        $template =~ s/\{\{\s*nsl\s*\|([^\}]+)\}\}/$1/ig;                     # remove {{not a typo|text}}
+        $template =~ s/\{\{\s*link if exists\s*\|([^\}]+)\}\}/$1/ig;    # replace {{link if exists|text|...}}
+        $template =~ s/\{\{\s*linktext\s*\|([^\}\|]+)\|.*?\}\}/$1/ig;   # replace {{linktext|text|...}}
+        $template =~ s/\{\{\s*no ?italics?\s*\|([^\}]+)\}\}/$1/ig;      # replace {{noitalic|text}}
+
+        $template =~ s/\{\{\s*no self link\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;  # replace {{no self link|...|text}}
+        $template =~ s/\{\{\s*no self link\s*\|([^\}]+)\}\}/$1/ig;            # replace {{no self link|text}}
+        $template =~ s/\{\{\s*nsl\s*\|([^\|]+)\|([^\}]+)\}\}/$2/ig;           # replace {{not a typo|...|text}}
+        $template =~ s/\{\{\s*nsl\s*\|([^\}]+)\}\}/$1/ig;                     # replace {{not a typo|text}}
 
         $citation =~ s/\Q$start\E/$template/;
-
-        $citation =~ s/\s{2,}/ /g;                                      # ensure only single space
     }
+
+    # pipe templates - must be after other template expansions
+    $citation =~ s/\{\{\s*!\s*\}\}/|/ig;                                # replace {{!}}
+    $citation =~ s/\{\{\s*pipe\s*\}\}/\|/ig;                            # replace {{pipe}}
 
     return $citation;
 }
@@ -593,8 +641,6 @@ while (<INPUT>) {
                 print "      Title    = $title\n";
                 print "      Citation = $citation\n";
             }
-
-            $citation =~ s/==WIKIDATA==(.+)==WIKIDATA==/{{Q|$1}}/g;     # restore {{Q|text}}
 
             $citation = ucfirst $citation if ($citation =~ /^[a-z]/);
             $citation = updateCitation($citation, $type, $titles);
