@@ -478,15 +478,21 @@ sub retrieveMaintenance {
                 $term =~ s/\{\{\(\(\}\}/{{/g;     # replace Template:((
                 $term =~ s/\{\{!\}\}/|/g;         # replace Template:!
                 if ($term =~ /\Q.*\E/) {
-                    $maintenance->{$target}->{'include'}->{$term} = $exclusion;
+                    $maintenance->{'patterns'}->{$target}->{'include'}->{$term} = $exclusion;
                 }
                 elsif ($term =~ /!/) {
-                    $maintenance->{$target}->{'exclude'}->{$term} = 1;
+                    $maintenance->{'patterns'}->{$target}->{'exclude'}->{$term} = 1;
                 }
                 else {
                     warn "Unknown pattern: $target --> [$term]\n";
                 }
             }
+        }
+
+        if ($line =~ /^\s*\{\{\s*JCW-regex\s*\|\s*(?:1\s*=\s*)?(.*?)\s*\|\s*(?:2\s*=\s*)?(?:<nowiki>\s*)?(.*?)(?:\s*<\/nowiki>)?\s*\}\}\s*$/i) {
+            my $target = $1;
+            my $regex  = $2;
+            $maintenance->{'regex'}->{$target}->{$regex} = 1;
         }
     }
 
@@ -733,10 +739,10 @@ for my $target (keys %$targets) {
 
 # process patterns
 
-$total = scalar keys %$maintenance;
+$total = scalar keys %{$maintenance->{'patterns'}};
 print "  processing $total patterns ...\n";
 
-for my $target (keys %$maintenance) {
+for my $target (keys %{$maintenance->{'patterns'}}) {
 
     my $results;
     my $counts;
@@ -745,16 +751,16 @@ for my $target (keys %$maintenance) {
 
     my $ignore = '';
 
-    for my $pattern (keys %{$maintenance->{$target}->{'exclude'}}) {
+    for my $pattern (keys %{$maintenance->{'patterns'}->{$target}->{'exclude'}}) {
         $pattern =~ s/!/%/g;
         $ignore .= "AND citation NOT LIKE '$pattern'\n";
     }
 
     # process pattern
 
-    for my $pattern (keys %{$maintenance->{$target}->{'include'}}) {
+    for my $pattern (keys %{$maintenance->{'patterns'}->{$target}->{'include'}}) {
 
-        my $exclusion = $maintenance->{$target}->{'include'}->{$pattern};
+        my $exclusion = $maintenance->{'patterns'}->{$target}->{'include'}->{$pattern};
 
         (my $like = $pattern) =~ s/\Q.*\E/%/g;
 
@@ -795,6 +801,67 @@ for my $target (keys %$maintenance) {
             $entries = "Patterns returned too many entries. Check patterns:\n";
             for my $pattern (sort keys %$counts) {
                 $entries .= "* $pattern returned $counts->{$pattern} entries\n";
+            }
+            $articles = 'N/A';
+            $citations = 'N/A';
+        }
+
+        my $sth = $dbMaintain->prepare(q{
+            INSERT INTO patterns (target, entries, articles, citations)
+            VALUES (?, ?, ?, ?)
+        });
+        $sth->execute($target, $entries, $articles, $citations);
+
+    }
+
+}
+
+# process regex
+
+$total = scalar keys %{$maintenance->{'regex'}};
+print "  processing $total regex ...\n";
+
+for my $target (keys %{$maintenance->{'regex'}}) {
+
+    my $results;
+    my $counts;
+
+    # process regex
+
+    for my $regex (keys %{$maintenance->{'regex'}->{$target}}) {
+
+        my $sth = $dbMaintain->prepare("
+            SELECT citation, dFormat, target, cCount, aCount
+            FROM individuals
+            WHERE type = 'journal'
+            AND citation REGEXP ?
+        ");
+        $sth->bind_param(1, $regex);
+        $sth->execute();
+        while (my $ref = $sth->fetchrow_hashref()) {
+            my $citation = $ref->{'citation'};
+            my $format = $ref->{'dFormat'};
+            $results->{$citation}->{'d-format'} = $format;
+            $results->{$citation}->{'target'} = $ref->{'target'};
+            $results->{$citation}->{'citation-count'} = $ref->{'cCount'};
+            $results->{$citation}->{'article-count'} = $ref->{'aCount'};
+            $counts->{$regex}++;
+        }
+
+    }
+
+    # generate final data (que up transactions & commit at end)
+
+    if ($results) {
+
+        my $entries = formatPatternEntries($results);
+        my $articles = articleCount($dbMaintain, 'journal', $results);
+        my $citations = citationCount($results);
+
+        if (scalar keys %$results > $PATTERNMAX) {
+            $entries = "Regex returned too many entries. Check regex:\n";
+            for my $regex (sort keys %$counts) {
+                $entries .= "* $regex returned $counts->{$regex} entries\n";
             }
             $articles = 'N/A';
             $citations = 'N/A';
