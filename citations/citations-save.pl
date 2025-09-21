@@ -40,6 +40,7 @@ my $DBINDIVIDUAL = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-individual.sqlite3'
 my $DBCOMMON     = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-common.sqlite3';
 my $DBSPECIFIC   = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-specific.sqlite3';
 my $DBMAINTAIN   = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-maintenance.sqlite3';
+my $DBSCRIPTS    = $ENV{'WIKI_WORKING_DIR'} . '/Citations/db-scripts.sqlite3';
 my $BOTINFO      = $ENV{'WIKI_CONFIG_DIR'} .  '/bot-info.txt';
 
 my $FALSEPOSITIVES = 'User:JL-Bot/Citations.cfg';
@@ -756,6 +757,7 @@ sub savePages {
             $prefix = 'ρ' if ($letter eq 'Publisher');
             $prefix = 'ϙ' if ($letter eq 'Questionable');
             $prefix = 'τ' if ($letter eq 'Target');
+            $prefix = 'σ' if ($letter eq 'Multiscript');
 
             my $defaultsort = sprintf("\n{{DEFAULTSORT:%s-%02d}}", $prefix, $pCurrent);
 
@@ -1025,6 +1027,78 @@ sub patternRevision {
     return $result;
 }
 
+sub generateScripts {
+
+    # Generate script results from database
+
+    my $database = shift;
+    my $row = shift;
+
+    my $sth = $database->prepare("
+        SELECT citation, annotated, dFormat, dType, target, tFormat, tType, cCount, aCount
+        FROM scripts
+        ORDER BY citation ASC
+    ");
+    $sth->execute();
+
+    my @results;
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+
+        my $citation  = $ref->{'citation'};
+        my $annotated = $ref->{'annotated'};
+        my $dFormat   = $ref->{'dFormat'};
+        my $dType     = $ref->{'dType'};
+        my $target    = $ref->{'target'};
+        my $tFormat   = $ref->{'tFormat'};
+        my $tType     = $ref->{'tType'};
+        my $cCount    = $ref->{'cCount'};
+        my $aCount    = $ref->{'aCount'};
+
+        $target  = setFormat( 'target', $target, $tFormat );
+
+        $dType = setType( 'journal', $dType );
+        $tType = setType( 'journal', $tType );
+
+        my $search = createSearch($citation);
+
+        my $line = "{{$row|display=$annotated|d-type=$dType|target=$target|t-type=$tType|citations=$cCount|articles=$aCount|search=$search}}\n";
+
+        push @results, $line;
+    }
+
+    return \@results;
+}
+
+sub generateScriptColors {
+
+    # Generate script color results from database
+
+    my $database = shift;
+    my $row = shift;
+
+    my $sth = $database->prepare("
+        SELECT script, color
+        FROM legend
+        ORDER BY script ASC
+    ");
+    $sth->execute();
+
+    my @results;
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+
+        my $script = $ref->{'script'};
+        my $color = $ref->{'color'};
+
+        my $line = "<span style='color: $color;'>$script</span> = $color";
+
+        push @results, $line;
+    }
+
+    return \@results;
+}
+
 
 #
 # Main
@@ -1033,16 +1107,17 @@ sub patternRevision {
 # command line options
 
 my %opts;
-getopts('hicqpmf', \%opts);
+getopts('hicqpmsf', \%opts);
 
 if ($opts{h}) {
-    print "usage: citations-8-save.pl [-hicqpmf]\n";
+    print "usage: citations-save.pl [-hicqpmsf]\n";
     print "       where: -h = help\n";
     print "              -i = save individual targets\n";
     print "              -c = save common targets\n";
     print "              -q = save questionable targets\n";
     print "              -p = save publishers\n";
     print "              -m = save maintenance\n";
+    print "              -s = save scripts\n";
     print "              -f = save false positive counts\n";
     print "       by default saves all, but if any specified only saves those\n";
     exit;
@@ -1053,15 +1128,25 @@ my $saveCommon = $opts{c} ? $opts{c} : 0;           # specify common targets
 my $saveQuestionable = $opts{q} ? $opts{q} : 0;     # specify questionable targets
 my $savePublishers = $opts{p} ? $opts{p} : 0;       # specify publishers
 my $saveMaintenance = $opts{m} ? $opts{m} : 0;      # specify maintenance
+my $saveScripts = $opts{s} ? $opts{s} : 0;          # specify scripts
 my $saveFPCounts = $opts{f} ? $opts{f} : 0;         # specify saveFPCounts
 
-unless ($saveIndividual or $saveCommon or $saveQuestionable or $savePublishers or $saveMaintenance or $saveFPCounts) {
+unless (
+    $saveIndividual or
+    $saveCommon or
+    $saveQuestionable or
+    $savePublishers or
+    $saveMaintenance or
+    $saveScripts or
+    $saveFPCounts
+) {
     # non-specified so save all
     $saveIndividual = 1;
     $saveCommon = 1;
     $saveQuestionable = 1;
     $savePublishers = 1;
     $saveMaintenance = 1;
+    $saveScripts = 1;
     $saveFPCounts = 1;
 }
 
@@ -1259,6 +1344,46 @@ if ($saveMaintenance) {
     $records = generateMaintenance($database, $row, 'patterns');
     $revision = patternRevision($database);
     saveMaintenance($bot, 'Patterns', $top, "$bottom|$revision", $records);
+
+    $database->commit;
+    $database->disconnect;
+}
+
+# save scripts
+
+if ($saveScripts) {
+
+    my $top = 'JCW-top';
+    my $bottom = 'JCW-bottom';
+    my $bottomScripts = 'JCW-bottom-scripts';
+    my $row = 'JCW-row';
+
+    my $database = citationsDB->new;
+    $database->openDatabase($DBSCRIPTS);
+
+    # update script pages
+
+    my $records = generateScripts($database, $row);
+    savePages($bot, 'journal', 'Multiscript', $top, $bottomScripts, $records, $NORMALMAX, $LINEMAX);
+
+    # update script bottom template
+
+    my $page = "Template:$bottomScripts";
+
+    my $colors = generateScriptColors($database);
+
+    my $content = "{{JCW-bottom|date=$wikidate}}\n";
+    $content   .= "'''Script Coloring'''\n";
+    for my $line (@$colors) {
+        $content .= "*$line\n";
+    }
+    $content   .= "<noinclude>\n";
+    $content   .= "{{documentation|Template:JCW-Main/doc}}\n";
+    $content   .= "[[Category:Journals cited by Wikipedia templates]]\n";
+    $content   .= "</noinclude>\n";
+
+    my ($text, $timestamp) = $bot->getText($page);
+    $bot->saveText($page, $timestamp, $content, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
 
     $database->commit;
     $database->disconnect;
