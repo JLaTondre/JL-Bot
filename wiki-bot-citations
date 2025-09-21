@@ -121,6 +121,7 @@ then
     outputTable db-maintenance.sqlite3 x-diacritics-$TIMESTAMP diacritics 'target, citations DESC, articles DESC'
     outputTable db-maintenance.sqlite3 x-dots-$TIMESTAMP dots 'target, citations DESC, articles DESC'
     outputTable db-maintenance.sqlite3 x-brackets-$TIMESTAMP brackets 'target, citations DESC, articles DESC'
+    outputTable db-scripts.sqlite3 x-scripts-$TIMESTAMP scripts 'annotated'
     exit
 fi
 
@@ -151,6 +152,7 @@ then
     $DIRECTORY/citations-configuration.pl
     $DIRECTORY/citations-specified.pl
     $DIRECTORY/citations-maintenance.pl
+    $DIRECTORY/citations-scripts.pl
     $DIRECTORY/citations-save.pl
     $DIRECTORY/citations-doi.pl
     $DIRECTORY/citations-statistics.pl
