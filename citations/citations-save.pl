@@ -757,7 +757,7 @@ sub savePages {
             $prefix = 'ρ' if ($letter eq 'Publisher');
             $prefix = 'ϙ' if ($letter eq 'Questionable');
             $prefix = 'τ' if ($letter eq 'Target');
-            $prefix = 'σ' if ($letter eq 'Multiscript');
+            $prefix = 'σ' if ($letter eq 'Maintenance/Multiscript');
 
             my $defaultsort = sprintf("\n{{DEFAULTSORT:%s-%02d}}", $prefix, $pCurrent);
 
@@ -1364,7 +1364,7 @@ if ($saveScripts) {
     # update script pages
 
     my $records = generateScripts($database, $row);
-    savePages($bot, 'journal', 'Multiscript', $top, $bottomScripts, $records, $NORMALMAX, $LINEMAX);
+    savePages($bot, 'journal', 'Maintenance/Multiscript', $top, $bottomScripts, $records, $NORMALMAX, $LINEMAX);
 
     # update script bottom template
 

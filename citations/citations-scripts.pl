@@ -79,50 +79,53 @@ sub annotateCitation {
     my @grapheme_clusters;
     while ($citation =~ /(\X)/gu) { push @grapheme_clusters, $1 }
 
-    my $output                = '';
-    my $current_script        = '';
-    my $current_run_content   = '';
-    my $pending_neutral_text  = '';
+    my $output          = '';
+    my $current_script  = '';
+    my $current_content = '';
+    my $pending_space   = '';
 
     for my $cluster (@grapheme_clusters) {
+
+        if ($cluster eq ' ') {
+            # accumulate space to output later
+            $pending_space .= $cluster;
+            next;
+        }
+
         my $script = determineGraphemeClusterScript($cluster);
 
-        if ($script eq 'Neutral') {
-            # buffer neutrals so we can decide what to do once we see what's next
-            $pending_neutral_text .= $cluster;
-            next;
-        }
-
-        if ($current_script eq '') {
-            # leading neutrals stay outside
-            $output .= $pending_neutral_text;
-            $pending_neutral_text = '';
-            $current_script       = $script;
-            $current_run_content  = $cluster;
-            next;
-        }
-
         if ($script eq $current_script) {
-            # same script: absorb *all* buffered neutrals into the current run
-            $current_run_content .= $pending_neutral_text . $cluster;
-            $pending_neutral_text = '';
-        } else {
-            # script switch: flush the current run; neutrals stay outside (between scripts)
-            if ($current_run_content ne '') {
-                $output .= applyTemplate($citation, $current_script, $current_run_content);
-            }
-            $output .= $pending_neutral_text;  # neutrals between different scripts -> outside
-            $pending_neutral_text = '';
-            $current_script       = $script;
-            $current_run_content  = $cluster;
+            # continue current run including any pending space
+            $current_content .= $pending_space . $cluster;
+            $pending_space = '';
+            next;
         }
+
+        # output current run + pending space
+        if ($current_content ne '') {
+            $output .= applyTemplate($citation, $current_script, $current_content);
+        }
+        $output .= $pending_space;
+        $current_content = '';
+        $pending_space   = '';
+
+        if ($script eq 'Neutral') {
+            # output neutral directly
+            $output .= escapeWikipedia($cluster);
+            $current_script  = '';
+            next;
+        }
+
+        # new script cluster
+        $current_script = $script;
+        $current_content = $cluster;
+
     }
 
-    # flush any open run; trailing neutrals remain outside
-    if ($current_run_content ne '') {
-        $output .= applyTemplate($citation, $current_script, $current_run_content);
+    # flush any open run
+    if ($current_content ne '') {
+        $output .= applyTemplate($citation, $current_script, $current_content);
     }
-    $output .= $pending_neutral_text;
 
     return $output;
 }
@@ -165,8 +168,10 @@ sub applyTemplate {
     }
     my $style = $color ? "style='color: $color;'" : '';
 
+    $content = escapeWikipedia($content);
+
     # return annotated content
-    return "<span class='tooltip' $style title='$script'><nowiki>$content</nowiki></span>";
+    return "<span class='tooltip' $style title='$script'>$content</span>";
 }
 
 sub determineCodePointScript {
@@ -200,6 +205,25 @@ sub determineGraphemeClusterScript {
     }
 
     return 'Neutral';
+}
+
+sub escapeWikipedia {
+
+    # Escape text for Wikipedia wikitext
+
+    my $text = shift;
+
+    $text =~ s/\[/&lsqb;/g;
+    $text =~ s/\]/&rsqb;/g;
+    $text =~ s/\{/&lcub;/g;
+    $text =~ s/\}/&rcub;/g;
+    $text =~ s/\|/&vert;/g;
+    $text =~ s/</&lt;/g;
+    $text =~ s/>/&gt;/g;
+    $text =~ s/"/&quot;/g;
+    $text =~ s/'/&#39;/g;
+
+    return $text;
 }
 
 sub excludeCases {
