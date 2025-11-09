@@ -323,6 +323,10 @@ sub getPageInfo {
 
     my ($text, ) = $bot->getText($talk);
 
+    # replace {{date|date}}
+
+    $text =~ s/\{\{\s*date\s*\|\s*([^|{}]+?)\s*(?:\|[^{}]*)?\}\}/$1/g;
+
     # parse vital class
 
     $info->{vital} = parseVital($text, $talk);
@@ -911,7 +915,11 @@ sub parseArticleHistory {
 
             $template =~ s/\{\{\s*-\?\s*\}\}/<JL-Bot question>?/;        # escape templated question mark
 
-            while ($template =~ /\|\s*dyk(\d?)date\s*=\s*(.*?)\s*(?:\||$)/gims) {
+            while ($template =~ /\|\s*dyk(\d?)date\s*=\s*
+                                    (?!\s*(?:\||\}\}|$))      # don’t match if empty or just spaces
+                                    (.*?)\s*(?:\||$)
+                                /gimsx)
+            {
                 my $count = $1 ? $1 : 'none';
                 my $ezdate = Date::EzDate->new($2);
 
@@ -927,7 +935,12 @@ sub parseArticleHistory {
                 $dates->{$count} = $date;
             }
 
-            while ($template =~ /\|\s*dyk(\d?)entry\s*=\s*(.*?)(?:^\s*\|\s*(?!adj|abbr|sigfig|sp)[\w\d]+\s*=|\}\}$)/gims) {
+            while ($template =~ /\|\s*dyk(\d?)entry\s*=\s*
+                                    (?!\s*(?:\||\}\}|$))      # don’t match if empty or just spaces
+                                    (.*?)
+                                    (?:^\s*\|\s*(?!adj|abbr|sigfig|sp)[\w\d]+\s*=|\}\}$)
+                                /gimsx)
+            {
                 my $count = $1 ? $1 : 'none';
                 my $blurb = $2;
 
@@ -1152,42 +1165,81 @@ sub parseMainPageNews {
 
     my $result = 'NONE';
 
-    if ($text =~ /\{\{\s*(?:Template:\s*)?itn\s*talk\s*\|(.*?)\}\}/ims) {
+    if ($text =~ /\{\{\s*(?:Template:\s*)?itn\s*talk\s*\|/ims) {
 
-        my $parameters = $1;
         my $date = 0;
 
-        if ($parameters =~ /date1?\s*=\s*([,\w\d\s]+)\s*(?:\|.*)?$/) {
-
+        if ($text =~ /\{\{\s*(?:Template:\s*)?itn\s*talk\s*\|[^}]*?\bdate1?\s*=\s*([^|}]+)(?=[|}])/ims) {
             # ITN talk|date=
             $date = $1;
         }
-        elsif ($parameters =~ /^\s*([\w\d,]+)\s*(?:\|\s*)?([\w\d,]+)\s*\|\s*(\d+)\s*(?:\|.*)?$/) {
-
-            # ITN talk|dd|mm|year
-            # ITN talk|dd mm|year
-            $date = "$1 $2 $3";
+        elsif ($text =~ /\{\{\s*(?:Template:\s*)?itn\s*talk\s*\|
+                            (?:\s*[^|}]*=\s*[^|}]*\||\s*\|\s*)*   # skip named (key=value) or empty fields
+                            \s*([^|}=][^|}=]*)\s*                 # 1st unnamed (no '=' anywhere)
+                            \|\s*([^|}=][^|}=]*)\s*               # 2nd unnamed (no '=' anywhere)
+                            (?=\||}})                             # clean boundary
+                        /imsx)
+        {
+            # ITN talk|dd mm|yyyy
+            $date = "$1 $2";
         }
-
-        my $ezdate = Date::EzDate->new($date);
-        $result = $ezdate->{'%Y-%m-%d'};
-
-        unless ($result) {
-            $result = '0000-00-00';
-            $itntalk->{$talk} = 1;
+        elsif ($text =~ /\{\{\s*(?:Template:\s*)?itn\s*talk\s*\|
+                            (?:\s*[^|}]*=\s*[^|}]*\||\s*\|\s*)*   # skip named (key=value) or empty fields
+                            \s*([^|}=][^|}=]*)\s*                 # 1st unnamed (no '=' anywhere)
+                            (?=\||}})                             # clean boundary
+                        /imsx)
+        {
+            # ITN talk|dd mm yyyy
+            $date = $1;
         }
-
-    }
-    elsif ($text =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|\s*itn1?date\s*=\s*(?:\[\[\s*)?([\w\d\s,]+)/ims) {
-        my $date = $1;
 
         if ($date) {
             my $ezdate = Date::EzDate->new($date);
             $result = $ezdate->{'%Y-%m-%d'};
+
+            unless ($result) {
+                $result = '0000-00-00';
+                $itntalk->{$talk} = 1;
+            }
         }
-        else {
-            $result = '0000-00-00';
-            $articlehistory->{$talk} = 1;
+
+    }
+    else {
+
+        my $templates = findTemplates($text, 'article');
+
+        for my $template (@$templates) {
+
+            if ($template =~ /\{\{\s*(?:Template:\s*)?article\s*(?:history|milestones).*\|/ims) {
+
+                # find every non-empty itndate parameter
+                my @matches = ($template =~ /
+                    \|\s*itn\d*date\s*=\s*(?:\[\[\s*)?
+                    (?!\s*(?:\||\}\}|\n))       # ignore empty or only spaces
+                    ([^|\}\n]*\S[^|\}\n]*)      # capture until next |, }} or newline
+                /igx);
+
+                my @dates;
+
+                # convert all matches to dates
+                for my $date (@matches) {
+                    my $ezdate = Date::EzDate->new($date);
+                    my $date = $ezdate->{'%Y-%m-%d'};
+                    unless ($date) {
+                        $date = '0000-00-00';
+                        $articlehistory->{$talk} = 1;
+                    }
+                    push @dates, $date;
+                }
+
+                # return earliest date if any found
+                if (@dates) {
+                    my @valid = grep { $_ ne '0000-00-00' } @dates;
+                    $result = @valid ? (sort @valid)[0] : '0000-00-00';
+                }
+
+            }
+
         }
 
     }
