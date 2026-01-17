@@ -166,12 +166,11 @@ sub applyTemplate {
         $color = $COLORS{$bucket};
         $assigned{$script} = $color;
     }
-    my $style = $color ? "style='color: $color;'" : '';
 
     $content = escapeWikipedia($content);
 
     # return annotated content
-    return "<span class='tooltip' $style title='$script'>$content</span>";
+    return "<span style='color: $color;'>$content</span>";
 }
 
 sub determineCodePointScript {
