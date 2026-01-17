@@ -148,6 +148,8 @@ sub new {
     $self->{settings}->{retries} = 10;
     $self->{settings}->{delay}   = 5;
 
+    $self->{'bot'}->{'ua'}->{'def_headers'}->{'user-agent'} = 'JL-Bot/0.0 (https://en.wikipedia.org/wiki/User_talk:JL-Bot) ' . $self->{bot}->{ua}->{def_headers}->{'user-agent'};
+
     return $self;
 }
 
