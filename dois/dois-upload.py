@@ -214,7 +214,7 @@ def saveSummary(site, listing):
 userinfo = getUserInfo(BOTINFO)
 
 try:
-    site = Site('en.wikipedia.org', 'JL-Bot/0.0 (https://en.wikipedia.org/wiki/User_talk:JL-Bot)')
+    site = Site('en.wikipedia.org', clients_useragent='JL-Bot/0.0 (https://en.wikipedia.org/wiki/User_talk:JL-Bot)')
     site.login(userinfo['username'], userinfo['password'])
 except Exception:
     traceback.print_exc()
