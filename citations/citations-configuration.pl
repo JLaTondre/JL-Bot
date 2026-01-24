@@ -11,7 +11,7 @@ use HTML::Entities;
 
 use lib dirname(__FILE__) . '/../modules';
 
-use citations qw( initial removeControlCharacters );
+use citations qw( initial loadRegistrants removeControlCharacters );
 
 use mybot;
 
@@ -301,6 +301,14 @@ my $b0 = Benchmark->new;
 
 my $bot = mybot->new($BOTINFO);
 
+# read prior registrants
+
+print "  loading prior registrants ...\n";
+
+my $prior = loadRegistrants($REGFILE);
+
+# open registrant file for writing
+
 open OUTPUT, '>:utf8', $REGFILE
     or die "ERROR: Could not open file ($REGFILE)\n  --> $!\n\n";
 
@@ -308,7 +316,7 @@ open OUTPUT, '>:utf8', $REGFILE
 
 print "  retrieving DOI redirects ...\n";
 
-my $redirects = $bot->getCategoryMembers($CATEGORY);
+my $redirects = $bot->getCategoryMembersWithRevId($CATEGORY);
 
 print "  processing DOI redirects ...\n";
 
@@ -319,6 +327,24 @@ for my $redirect (keys %$redirects) {
         warn "WARNING: unexpected redirect format --> $redirect\n";
         next;
     }
+
+    # if page present in prior registrants & not changed
+    # output prior registrant & skip processing
+
+    my $revId = $redirects->{$redirect};
+
+    if ((exists $prior->{$redirect}) and ($revId == $prior->{$redirect}->{'rev-id'})) {
+        my $registrant = $prior->{$redirect}->{'registrant'};
+        my $target = $prior->{$redirect}->{'target'};
+        my $initial = initial($target);
+        $targets->{$initial}->{$target}->{$redirect} = 1;
+        $initial = initial($registrant);
+        $targets->{$initial}->{$registrant}->{$redirect} = 1;
+        print OUTPUT "$redirect\t$revId\t$registrant\t$target\n";
+        next;
+    }
+
+    # does not exist or changed so process
 
     my ($text, ) = $bot->getText($redirect);
 
@@ -338,10 +364,10 @@ for my $redirect (keys %$redirects) {
     if ($registrant) {
         $initial = initial($registrant);
         $targets->{$initial}->{$registrant}->{$redirect} = 1;
-        print OUTPUT "$redirect\t$registrant\n";
+        print OUTPUT "$redirect\t$revId\t$registrant\t$target\n";
     }
     else {
-        print OUTPUT "$redirect\t$target\n";
+        print OUTPUT "$redirect\t$revId\t$target\t$target\n";
     }
 }
 

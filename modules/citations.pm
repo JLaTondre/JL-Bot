@@ -29,6 +29,7 @@ our @EXPORT_OK = qw(
     initial
     isUppercaseMatch
     loadRedirects
+    loadRegistrants
     normalizeCitation
     queryDate
     removeControlCharacters
@@ -505,6 +506,31 @@ sub loadRedirects {
     }
 
     return $results;
+}
+
+sub loadRegistrants {
+
+    # Returns known registrants from file
+
+    my $regFile = shift;
+
+    open INPUT, '<:utf8', $regFile
+        or die "ERROR: Could not open file ($regFile)\n  --> $!\n\n";
+
+    my $registrants;
+
+    while (<INPUT>) {
+        if (/^(10\.\d{4,5})\t(\d+)\t(.+)\t(.+)$/) {
+            $registrants->{$1}->{'rev-id'} = $2;
+            $registrants->{$1}->{'registrant'} = $3;
+            $registrants->{$1}->{'target'} = $4;
+        }
+        else {
+            die "ERROR: Unknown DOI registrant line! -->\n  $_\n";
+        }
+    }
+
+    return $registrants;
 }
 
 sub normalizeCitation {
