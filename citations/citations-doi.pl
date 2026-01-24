@@ -14,7 +14,7 @@ use POSIX qw(strftime);
 
 use lib dirname(__FILE__) . '/../modules';
 
-use citations qw( checkInterwiki loadInterwiki queryDate requiresColon setFormat );
+use citations qw( checkInterwiki loadInterwiki loadRegistrants queryDate requiresColon setFormat );
 use citationsDB;
 use mybot;
 
@@ -228,31 +228,6 @@ sub loadCitations {
     return $results;
 }
 
-sub loadRegistrants {
-
-    # Returns known registrants from file
-
-    my $regFile = shift;
-
-    print "  loading registrants ...\n";
-
-    open INPUT, '<:utf8', $REGFILE
-        or die "ERROR: Could not open file ($regFile)\n  --> $!\n\n";
-
-    my $registrants;
-
-    while (<INPUT>) {
-        if (/^(10\.\d{4,5})\t(.+)$/) {
-            $registrants->{$1} = $2;
-        }
-        else {
-            die "ERROR: Unknown DOI registrant line! -->\n  $_\n";
-        }
-    }
-
-    return $registrants;
-}
-
 sub queryTitle {
 
     # Query information regarding a title from the database
@@ -398,7 +373,9 @@ my $pages = retrievePages($bot, $MAIN);
 
 # load registrants & doi citations
 
+print "  loading registrants ...\n";
 my $registrants = loadRegistrants($REGFILE);
+
 my $dois = loadCitations($INDIVIDUAL);
 
 # open titles database
@@ -419,7 +396,7 @@ for my $prefix (sort sortPrefixes keys %$dois) {
     my $cCount = $dois->{$prefix}->{'count'};
 
     my $registrant = '';
-    $registrant = $registrants->{$prefix} if (exists $registrants->{$prefix});
+    $registrant = $registrants->{$prefix}->{'registrant'} if (exists $registrants->{$prefix});
 
     my $doi = $prefix;
     $doi =~ s/^Invalid: //;
