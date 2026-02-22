@@ -144,6 +144,7 @@ then
 
     mv Citations Citations-${LATEST}-${TIMESTAMP}
     mkdir Citations
+    cp Citations-${LATEST}-${TIMESTAMP}/doi-registrants Citations/.
 
     $DIRECTORY/citations-parse.pl "enwiki-${DOWNLOAD}-pages-articles.xml.bz2"
     $DIRECTORY/citations-extract.pl
