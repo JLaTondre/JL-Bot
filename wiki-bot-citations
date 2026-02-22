@@ -15,12 +15,7 @@ CONFIGMAIN=( 'User:JL-Bot/Maintenance.cfg' )
 function checkDownload() {
     # determine expected dump based on date
     DAY=`date +%d`
-    if [ "$DAY" -gt 20 ]
-    then
-        EXPECTED=$(date +%Y%m)20
-    else
-        EXPECTED=$(date +%Y%m)01
-    fi
+    EXPECTED=$(date +%Y%m)01
     # if current & expected don't match see if expected is available for download
     if [ "${1}" -ne "$EXPECTED" ]
     then
