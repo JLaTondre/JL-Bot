@@ -75,7 +75,7 @@ sub findTarget {
     my $redirect = shift;
     my $text = shift;
 
-    if ($text =~ /^\s*#redirect\s*:?\s*\[\[\s*:?\s*(.+?)\s*(?:\]|(?<!&)#|\n|\|)/i) {
+    if ($text =~ /^\s*#redirect\s*:?\s*\[\[\s*:?\s*(.+?)\s*(?:\]|(?<!&)#|\n|\|)/mi) {
         my $target = $1;
         $target = decode_entities($target);
         $target =~ s/%26/&/;
