@@ -285,7 +285,18 @@ sub saveOutput {
     my $page = "Wikipedia:WikiProject Academic Journals/Journals cited by Wikipedia/DOI/$current";
     $page = "Wikipedia:WikiProject Academic Journals/Journals cited by Wikipedia/Maintenance/Invalid DOI prefixes" if ($current eq 'Invalid');
     my ($old, $timestamp) = $bot->getText($page);
-    $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+
+    # chomp is needed to compare as old will not have newline at end
+
+    chomp($output);
+    if (($old) and ($old eq $output)) {
+        print "  skipping $current update as no change ...\n";
+        return;
+    }
+    else {
+        print "  saving $current ...\n";
+        $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+    }
 
     unless ($old)  {
         # create talk page redirect
@@ -511,7 +522,6 @@ else {
 
             # save
 
-            print "  saving $current ...\n";
             saveOutput($current, $output, $bot);
 
             # get ready for next page
@@ -529,7 +539,6 @@ else {
     # add bottom of page & save for last one (which would be Invalid)
     $output .= "{{JCW-bottom|date=$date|type=no|legend=no}}\n";
     $output .= "{{DEFAULTSORT:* Invalid DOI prefixes}}\n" ;
-    print "  saving $current ...\n";
     saveOutput($current, $output, $bot);
 }
 
