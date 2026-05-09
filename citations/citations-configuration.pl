@@ -160,8 +160,6 @@ sub updatePublisher {
     my $targets = shift;
     my $page = shift;
 
-    print "  updating $page configuration...\n";
-
     my ($original, $timestamp) = $bot->getText($page);
     $original = removeControlCharacters($original);
 
@@ -216,7 +214,18 @@ sub updatePublisher {
         }
     }
 
-    $bot->saveText($page, $timestamp, $updated, 'updating Wikipedia citation configuration based on DOI redirects', 'NotMinor', 'Bot');
+    # chomp is needed to compare as they may only differ by an extra newline
+
+    chomp($original);
+    chomp($updated);
+
+    if ($original ne $updated) {
+        print "  updating $page configuration...\n";
+        $bot->saveText($page, $timestamp, $updated, 'updating Wikipedia citation configuration based on DOI redirects', 'NotMinor', 'Bot');
+    }
+    else {
+        print "  skipping $page update as no change...\n";
+    }
 
     return;
 }
@@ -228,8 +237,6 @@ sub updateQuestionable {
     my $bot = shift;
     my $targets = shift;
     my $page = shift;
-
-    print "  updating $page configuration...\n";
 
     my ($original, $timestamp) = $bot->getText($page);
     $original = removeControlCharacters($original);
@@ -275,7 +282,18 @@ sub updateQuestionable {
         }
     }
 
-    $bot->saveText($page, $timestamp, $updated, 'updating Wikipedia citation configuration based on DOI redirects', 'NotMinor', 'Bot');
+    # chomp is needed to compare as they may only differ by an extra newline
+
+    chomp($original);
+    chomp($updated);
+
+    if ($original ne $updated) {
+        print "  updating $page configuration...\n";
+        $bot->saveText($page, $timestamp, $updated, 'updating Wikipedia citation configuration based on DOI redirects', 'NotMinor', 'Bot');
+    }
+    else {
+        print "  skipping $page update as no change...\n";
+    }
 
     return;
 }
