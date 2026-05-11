@@ -763,8 +763,6 @@ sub savePages {
 
             $output .= $defaultsort;
 
-            print "  saving $type $letter$pCurrent ...\n";
-
             # save main page
 
             my $page = "Wikipedia:$PAGETITLE{$type}/$letter$pCurrent";
@@ -772,7 +770,16 @@ sub savePages {
 
             $pStatus = pageStatus($text);
 
-            $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+            # chomp is needed to compare as old will not have newline at end
+
+            chomp($output);
+            if (($pStatus ne 'NEW') and ($text eq $output)) {
+                print "  skipping $type $letter$pCurrent as no change ...\n";
+            }
+            else {
+                print "  saving $type $letter$pCurrent ...\n";
+                $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+            }
 
             # create redirects if this is a new page
 
@@ -817,8 +824,6 @@ sub saveInvalid {
     my $bottom = shift;
     my $records = shift;
 
-    print "  saving $type Invalid ...\n";
-
     my $output  = "{{$MAIN{$type}|letter=Invalid}}\n";
     $output .= "{|class=wikitable\n|-\n!Target\n!Entries (Citations, Articles)\n!Total Citations\n";
     $output .= "|-\n|Invalid\n|\n";
@@ -829,7 +834,15 @@ sub saveInvalid {
     my $page = "Wikipedia:$PAGETITLE{$type}/Maintenance/Invalid titles";
     my ($text, $timestamp) = $bot->getText($page);
 
-    $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+    # chomp is needed to compare as old will not have newline at end
+    chomp($output);
+    if ($text eq $output) {
+        print "  skipping $type Invalid as no change ...\n";
+    }
+    else {
+        print "  saving $type Invalid ...\n";
+        $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+    }
 
     return;
 }
@@ -939,8 +952,6 @@ sub saveMaintenance {
     my $bottom = shift;
     my $records = shift;
 
-    print "  saving $name ...\n";
-
     my $type = 'journal';
 
     my $output = "{{$MAIN{$type}|letter=}}\n";
@@ -956,7 +967,15 @@ sub saveMaintenance {
     my $page = "Wikipedia:$PAGETITLE{$type}/Maintenance/$name";
     my ($text, $timestamp) = $bot->getText($page);
 
-    $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+    # chomp is needed to compare as old will not have newline at end
+    chomp($output);
+    if ($text eq $output) {
+        print "  skipping $name as no change ...\n";
+    }
+    else {
+        print "  saving $name ...\n";
+        $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+    }
 
     return;
 }
