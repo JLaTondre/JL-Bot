@@ -405,9 +405,9 @@ sub saveText {
     }
 
     # force cached edit token to be cleared as token eventually expires in long run
-    # -- will MediWiki::API eventually fix this?
-
+    # token used to be under "edit"; it is now under "csrf".
     delete $self->{bot}->{config}->{tokens}->{edit} if (exists $self->{bot}->{config}->{tokens}->{edit});
+    delete $self->{bot}->{config}->{tokens}->{csrf} if (exists $self->{bot}->{config}->{tokens}->{csrf});
 
     # create edit parameters and save page
 
@@ -422,13 +422,11 @@ sub saveText {
     $parameters->{minor} = 1 if ($minor eq "Minor");
     $parameters->{bot}   = 1 if ($isBot eq "Bot");
 
-    $self->{bot}->edit( $parameters )
-        or sub {
-            carp "\nMyBot->saveText: " . $self->{bot}->{error}->{code} . ': ' . $self->{bot}->{error}->{details} . "\n";
-            $self->{bot}->edit( $parameters )
-                or croak "Failed again!\n";
-        }
+    my $result = $self->{bot}->edit( $parameters );
 
+    unless ($result) {
+        croak "\nMyBot->saveText: " . $self->{bot}->{error}->{code} . ': ' . $self->{bot}->{error}->{details};
+    }
 }
 
 sub getTimestamp {
