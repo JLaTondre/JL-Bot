@@ -12,7 +12,6 @@ use strict;
 use Benchmark;
 use File::Basename;
 use Getopt::Std;
-use Text::LevenshteinXS qw( distance );
 
 use lib dirname(__FILE__) . '/../modules';
 
@@ -23,6 +22,7 @@ use citations qw(
     findRedirectExpansions
     formatCitation
     isUppercaseMatch
+    loadNormalizationIndex
     loadRedirects
     normalizeCitation
     retrieveFalsePositives
@@ -400,9 +400,11 @@ for my $type (@TYPES) {
     my $total = scalar keys %$normalizations;
     print "  processing $total normalizations ...\n";
 
+    my $normalizationIndex = loadNormalizationIndex($dbCommon, $type);
+
     for my $normalization (keys %$normalizations) {
         next if ($normalization eq '--');
-        my $candidates = findNormalizations($dbCommon, $type, $normalization);
+        my $candidates = findNormalizations($normalizationIndex, $normalization);
         for my $candidate (keys %$candidates) {
             my $result = findIndividual($dbCommon, $type, $candidate);
             $normalizations->{$normalization}->{$candidate} = $result if ($result);
@@ -434,4 +436,4 @@ my $p1 = Benchmark->new;
 my $pd = timediff($p1, $p0);
 my $ps = timestr($pd);
 $ps =~ s/^\s*(\d+)\swallclock secs.*$/$1/;
-print "  specified citations processed in $ps seconds\n";
+print "  common citations processed in $ps seconds\n";
