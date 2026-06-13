@@ -11,6 +11,12 @@ use MediaWiki::API;
 #
 
 my $_allnamespaces = "-1|-2|0|1|10|100|101|108|109|11|12|13|14|15|2|3|4|5|6|7|8|9|";
+my $_retry503Delay = 10;
+my $_retry429Delay = 60;
+my %_httpStatusText = (
+    429 => '429 Too Many Requests',
+    503 => '503 Service Unavailable',
+);
 
 #
 # Internal Subroutines
@@ -40,6 +46,72 @@ sub _loaduser {
     return $username, $password;
 }
 
+sub _errorMessage {
+
+    # This subroutine returns the latest API error message.
+
+    my $self = shift;
+
+    my $code    = $self->{bot}->{error}->{code};
+    my $details = $self->{bot}->{error}->{details};
+
+    $code    = "" unless (defined $code);
+    $details = "" unless (defined $details);
+
+    return "$code: $details";
+}
+
+sub _isHttpError {
+
+    # This subroutine determines whether the latest API failure was a given HTTP error code.
+
+    my $self = shift;
+    my $code = shift;
+
+    my $response = $self->{bot}->{response};
+    if ($response and $response->can("code") and ($response->code == $code)) {
+        return 1;
+    }
+
+    my $details = $self->{bot}->{error}->{details};
+    if (defined $details and ($details =~ /\b$code\b/)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub _callWithHttpRetry {
+
+    # This subroutine retries a failed Wikipedia API call once when the failure
+    # matches the given HTTP error code.  The caller supplies the code, the delay
+    # in seconds, and the call as a code reference.
+
+    my $self     = shift;
+    my $function = shift;
+    my $code     = shift;
+    my $delay    = shift;
+    my $call     = shift;
+
+    my $status = $_httpStatusText{$code} // $code;
+
+    delete $self->{bot}->{response};
+    my $result = $call->();
+
+    return $result if ($result);
+    return if (not _isHttpError($self, $code));
+
+    carp "\nWARNING: $function: Wikipedia API returned $status; waiting $delay seconds before retrying.\n";
+    sleep $delay;
+
+    delete $self->{bot}->{response};
+    $result = $call->();
+
+    return $result if ($result);
+
+    croak "\nFATAL: $function: Wikipedia API call failed after retrying $status: " . _errorMessage($self);
+}
+
 sub _api {
 
     # This subroutine executes an API call.  It is passed the calling function
@@ -53,12 +125,12 @@ sub _api {
     my $attempts = 0;     # number of times API called
     my $error    = 1;     # whether error returned
 
-    while (($attempts lt $self->{settings}->{retries}) and ($error)) {
+    while (($attempts < $self->{settings}->{retries}) and ($error)) {
 
         $attempts++;
         $error = 0;
 
-        $results = $self->{bot}->api( $config )
+        $results = _callWithHttpRetry($self, $function, 503, $_retry503Delay, sub { return $self->{bot}->api( $config ); } )
         or $error = 1;
 
         sleep $self->{settings}->{delay} if ($error);
@@ -66,7 +138,7 @@ sub _api {
     }
 
     if ($error) {
-        croak "\n$function: " . $self->{bot}->{error}->{code} . ': ' . $self->{bot}->{error}->{details};
+        croak "\n$function: " . _errorMessage($self);
     }
 
     return $results;
@@ -87,12 +159,12 @@ sub _list {
 
     $config->{'rawcontinue'} = 1;
 
-    while (($attempts lt $self->{settings}->{retries}) and ($error)) {
+    while (($attempts < $self->{settings}->{retries}) and ($error)) {
 
         $attempts++;
         $error = 0;
 
-        $results = $self->{bot}->list( $config )
+        $results = _callWithHttpRetry($self, $function, 503, $_retry503Delay, sub { return $self->{bot}->list( $config ); } )
         or $error = 1;
 
         sleep $self->{settings}->{delay} if ($error);
@@ -100,7 +172,7 @@ sub _list {
     }
 
     if ($error) {
-        croak "\n$function: " . $self->{bot}->{error}->{code} . ': ' . $self->{bot}->{error}->{details};
+        croak "\n$function: " . _errorMessage($self);
     }
 
     return $results;
@@ -136,14 +208,14 @@ sub new {
         no_proxy => 1,
     } );
 
+    $self->{bot} = $bot;
+
     unless ($nologin) {
         my ($username, $password) = _loaduser($userinfo);
 
-        $bot->login( {lgname => $username, lgpassword => $password } )
-            or croak "\nMyBot->new: " . $bot->{error}->{code} . ': ' . $bot->{error}->{details};
+        my $result = _callWithHttpRetry($self, "MyBot->new", 429, $_retry429Delay, sub { return $bot->login( {lgname => $username, lgpassword => $password} ); });
+        croak "\nMyBot->new: " . $bot->{error}->{code} . ': ' . $bot->{error}->{details} unless $result;
     }
-
-    $self->{bot} = $bot;
 
     $self->{settings}->{retries} = 10;
     $self->{settings}->{delay}   = 5;
@@ -422,10 +494,10 @@ sub saveText {
     $parameters->{minor} = 1 if ($minor eq "Minor");
     $parameters->{bot}   = 1 if ($isBot eq "Bot");
 
-    my $result = $self->{bot}->edit( $parameters );
+    my $result = _callWithHttpRetry($self, "MyBot->saveText", 503, $_retry503Delay, sub { return $self->{bot}->edit( $parameters ); } );
 
     unless ($result) {
-        croak "\nMyBot->saveText: " . $self->{bot}->{error}->{code} . ': ' . $self->{bot}->{error}->{details};
+        croak "\nMyBot->saveText: " . _errorMessage($self);
     }
 }
 
