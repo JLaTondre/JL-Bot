@@ -21,13 +21,14 @@ our @EXPORT_OK = qw(
     checkInterwiki
     findCitation
     findIndividual
-    findTemplates
-    loadInterwiki
     findNormalizations
     findRedirectExpansions
+    findTemplates
     formatCitation
     initial
     isUppercaseMatch
+    loadInterwiki
+    loadNormalizationIndex
     loadRedirects
     loadRegistrants
     normalizeCitation
@@ -70,14 +71,10 @@ sub findCitation {
     my $citation = shift;
 
     my $sth = $database->prepare('
-        SELECT i.target, i.dFormat, i.cCount, i.aCount, c.article, n.normalization
-        FROM individuals AS i, citations AS c, normalizations AS n
-        WHERE i.type = c.type
-        AND i.type = n.type
-        AND i.type = ?
-        AND i.citation = c.citation
-        AND i.citation = n.citation
-        AND i.citation = ?
+        SELECT target, dFormat, cCount, aCount
+        FROM individuals
+        WHERE type = ?
+        AND citation = ?
     ');
     $sth->bind_param(1, $type);
     $sth->bind_param(2, $citation);
@@ -86,13 +83,39 @@ sub findCitation {
     my $result;
 
     while (my $ref = $sth->fetchrow_hashref()) {
-        # due to join, multiple duplicate results will be returned for these
         $result->{'article-count'} = $ref->{'aCount'};
         $result->{'citation-count'} = $ref->{'cCount'};
         $result->{'display-format'} = $ref->{'dFormat'};
         $result->{'target'} = $ref->{'target'};
-        # article & normalization can have multiple results
+    }
+
+    return unless ($result);
+
+    $sth = $database->prepare('
+        SELECT article
+        FROM citations
+        WHERE type = ?
+        AND citation = ?
+    ');
+    $sth->bind_param(1, $type);
+    $sth->bind_param(2, $citation);
+    $sth->execute();
+
+    while (my $ref = $sth->fetchrow_hashref()) {
         $result->{'articles'}->{ $ref->{'article'} } = 1;
+    }
+
+    $sth = $database->prepare('
+        SELECT normalization
+        FROM normalizations INDEXED BY indexNTypeCitation
+        WHERE type = ?
+        AND citation = ?
+    ');
+    $sth->bind_param(1, $type);
+    $sth->bind_param(2, $citation);
+    $sth->execute();
+
+    while (my $ref = $sth->fetchrow_hashref()) {
         $result->{'normalizations'}->{ $ref->{'normalization'} } = 1;
     }
 
@@ -138,12 +161,12 @@ sub findIndividual {
     return $result;
 }
 
+
 sub findNormalizations {
 
-    # Find citations that match the candidate normalization
+    # Find citations that match the candidate normalization from the in-memory index.
 
-    my $database = shift;
-    my $type = shift;
+    my $index = shift;
     my $candidate = shift;
 
     # 0-2  = process with delta of 0
@@ -153,191 +176,138 @@ sub findNormalizations {
 
     my $length = length($candidate);
     my $delta = 0;
-    my $like;
-
-    # create patterns based on beginning & ending characters and the max delta
-    # there should be a way to do this dynamically vs. if...elsif
 
     if ($length < 3) {
-        $like = qq{
-            normalization = "$candidate"
-        };
+        my $results;
+        for my $citation (keys %{$index->{'exact'}->{$candidate} || {}}) {
+            $results->{$citation} = 1;
+        }
+        return $results;
     }
     elsif ($length < 6) {
         $delta = 1;
-        my $start0 = substr($candidate, 0, 1);
-        my $start1 = substr($candidate, 1, 2);
-        my $last0 = substr($candidate, $length - 1, 1);
-        my $last1 = substr($candidate, $length - 2, 1);
-        $like = qq{ (
-                normalization LIKE "$start0%"
-                OR normalization LIKE "$start1%"
-                OR normalization LIKE "_$start0%"
-                OR normalization LIKE "_$start1%"
-            )
-            AND (
-                normalization LIKE "%${last0}"
-                OR normalization LIKE "%${last1}"
-                OR normalization LIKE "%${last0}_"
-                OR normalization LIKE "%${last1}_"
-            )
-        };
     }
     elsif ($length < 21) {
         $delta = 2;
-        my $start0 = substr($candidate, 0, 1);
-        my $start1 = substr($candidate, 1, 2);
-        my $start2 = substr($candidate, 2, 2);
-        my $last0 = substr($candidate, $length - 1, 1);
-        my $last1 = substr($candidate, $length - 2, 1);
-        my $last2 = substr($candidate, $length - 3, 1);
-        $like = qq{ (
-                normalization LIKE "$start0%"
-                OR normalization LIKE "$start1%"
-                OR normalization LIKE "$start2%"
-                OR normalization LIKE "_$start0%"
-                OR normalization LIKE "_$start1%"
-                OR normalization LIKE "_$start2%"
-                OR normalization LIKE "__$start0%"
-                OR normalization LIKE "__$start1%"
-                OR normalization LIKE "__$start2%"
-            )
-            AND (
-                normalization LIKE "%${last0}"
-                OR normalization LIKE "%${last1}"
-                OR normalization LIKE "%${last0}_"
-                OR normalization LIKE "%${last1}_"
-                OR normalization LIKE "%${last2}_"
-                OR normalization LIKE "%${last0}__"
-                OR normalization LIKE "%${last1}__"
-                OR normalization LIKE "%${last2}__"
-            )
-        };
     }
     else {
         $delta = 3;
-        my $start0 = substr($candidate, 0, 1);
-        my $start1 = substr($candidate, 1, 2);
-        my $start2 = substr($candidate, 2, 2);
-        my $start3 = substr($candidate, 3, 2);
+    }
+
+    my @startKeys;
+    my @endKeys;
+    my @endDashKeys;
+
+    if ($delta == 1) {
+        my @starts = (
+            substr($candidate, 0, 1),
+            substr($candidate, 1, 2),
+        );
+        for my $offset (0 .. 1) {
+            push @startKeys, map { "$offset\t$_" } @starts;
+        }
+
+        my @ends = (
+            substr($candidate, $length - 1, 1),
+            substr($candidate, $length - 2, 1),
+        );
+        for my $offset (0 .. 1) {
+            push @endKeys, map { "$offset\t$_" } @ends;
+        }
+    }
+    elsif ($delta == 2) {
+        my @starts = (
+            substr($candidate, 0, 1),
+            substr($candidate, 1, 2),
+            substr($candidate, 2, 2),
+        );
+        for my $offset (0 .. 2) {
+            push @startKeys, map { "$offset\t$_" } @starts;
+        }
+
+        my $last0 = substr($candidate, $length - 1, 1);
+        my $last1 = substr($candidate, $length - 2, 1);
+        my $last2 = substr($candidate, $length - 3, 1);
+        push @endKeys, "0\t$last0", "0\t$last1";
+        for my $offset (1 .. 2) {
+            push @endKeys, map { "$offset\t$_" } ($last0, $last1, $last2);
+        }
+    }
+    else {
+        my @starts = (
+            substr($candidate, 0, 1),
+            substr($candidate, 1, 2),
+            substr($candidate, 2, 2),
+            substr($candidate, 3, 2),
+        );
+        for my $offset (0 .. 3) {
+            push @startKeys, map { "$offset\t$_" } @starts;
+        }
+
         my $last0 = substr($candidate, $length - 1, 1);
         my $last1 = substr($candidate, $length - 2, 1);
         my $last2 = substr($candidate, $length - 3, 1);
         my $last3 = substr($candidate, $length - 4, 1);
-        $like = qq{ (
-                normalization LIKE "$start0%"
-                OR normalization LIKE "$start1%"
-                OR normalization LIKE "$start2%"
-                OR normalization LIKE "$start3%"
-                OR normalization LIKE "_$start0%"
-                OR normalization LIKE "_$start1%"
-                OR normalization LIKE "_$start2%"
-                OR normalization LIKE "_$start3%"
-                OR normalization LIKE "__$start0%"
-                OR normalization LIKE "__$start1%"
-                OR normalization LIKE "__$start2%"
-                OR normalization LIKE "__$start3%"
-                OR normalization LIKE "___$start0%"
-                OR normalization LIKE "___$start1%"
-                OR normalization LIKE "___$start2%"
-                OR normalization LIKE "___$start3%"
-            )
-            AND (
-                normalization LIKE "%${last0}"
-                OR normalization LIKE "%${last1}"
-                OR normalization LIKE "%${last2}"
-                OR normalization LIKE "%${last3}"
-                OR normalization LIKE "%${last0}_"
-                OR normalization LIKE "%${last1}_"
-                OR normalization LIKE "%${last2}_"
-                OR normalization LIKE "%${last3}_"
-                OR normalization LIKE "%${last0}__"
-                OR normalization LIKE "%${last1}__"
-                OR normalization LIKE "%${last2}__"
-                OR normalization LIKE "%${last3}__"
-                OR normalization LIKE "%${last0}___"
-                OR normalization LIKE "%${last1}__-"
-                OR normalization LIKE "%${last2}__-"
-                OR normalization LIKE "%${last3}__-"
-            )
-        };
+        for my $offset (0 .. 2) {
+            push @endKeys, map { "$offset\t$_" } ($last0, $last1, $last2, $last3);
+        }
+        push @endKeys, "3\t$last0";
+        push @endDashKeys, $last1, $last2, $last3;
     }
 
     my $minimum = $length - $delta;
     my $maximum = $length + $delta;
-
-    my $sql = qq{
-        SELECT citation, normalization
-        FROM normalizations
-        WHERE type = "$type"
-        AND length >= $minimum
-        AND length <= $maximum
-        AND $like
-    };
-
-    my $sth = $database->prepare($sql);
-    $sth->execute();
-
-    my $results;
-
-    # redo delta based on 'non-countable' terms
-    # need to do after query as want to match with term, but reduce delta if needed
+    my $finalDelta = $delta;
 
     my $temporary = $candidate;
     if ($temporary =~ s/(?:journals?|newsl?(?:etter)?|magazine|proc(?:eeding)?s?|rev(?:iew)?s?|online|trans(?:action)?s?)//g) {
-        $length = length($temporary);
-        # 0-2  = process with delta of 0
-        # 3-5  = process with delta of 1
-        # 6-20 = process with delta of 2
-        # 21+  = process with delta of 3
-        $delta = 2 if ($length < 21);
-        $delta = 1 if ($length < 6);
-        $delta = 0 if ($length < 3);
+        my $temporaryLength = length($temporary);
+        $finalDelta = 2 if ($temporaryLength < 21);
+        $finalDelta = 1 if ($temporaryLength < 6);
+        $finalDelta = 0 if ($temporaryLength < 3);
     }
 
-    while (my $ref = $sth->fetchrow_hashref()) {
-        my $citation = $ref->{'citation'};
-        my $normalization = $ref->{'normalization'};
-        if (distance($normalization, $candidate) <= $delta) {
-            $results->{$citation} = 1;
+    my $results;
+
+    for my $candidateLength ($minimum .. $maximum) {
+        my $bucket = $index->{'byLength'}->{$candidateLength};
+        next unless ($bucket);
+
+        my %starts;
+        for my $key (@startKeys) {
+            for my $id (@{$bucket->{'start'}->{$key} || []}) {
+                $starts{$id} = 1;
+            }
+        }
+        next unless (%starts);
+
+        my %ends;
+        for my $key (@endKeys) {
+            for my $id (@{$bucket->{'end'}->{$key} || []}) {
+                $ends{$id} = 1;
+            }
+        }
+        for my $key (@endDashKeys) {
+            for my $id (@{$bucket->{'endDash'}->{$key} || []}) {
+                $ends{$id} = 1;
+            }
+        }
+        next unless (%ends);
+
+        my ($smaller, $larger) = scalar(keys %starts) < scalar(keys %ends)
+            ? (\%starts, \%ends)
+            : (\%ends, \%starts);
+
+        for my $id (keys %$smaller) {
+            next unless (exists $larger->{$id});
+            my $record = $index->{'records'}->[$id];
+            if (distance($record->{'normalization'}, $candidate) <= $finalDelta) {
+                $results->{$record->{'citation'}} = 1;
+            }
         }
     }
 
     return $results;
-}
-
-sub findTemplates {
-
-    # Find templates in a text string.
-
-    my $text = shift;
-
-    # the following code is based on perlfaq6's "Can I use Perl regular
-    # expressions to match balanced text?" example
-
-    my $regex = qr/
-        (               # start of bracket 1
-        \{\{           # match an opening template
-            (?:
-            [^{}]++      # one or more non brackets, non backtracking
-            |
-            (?1)         # recurse to bracket 1
-            )*
-        \}\}           # match a closing template
-        )               # end of bracket 1
-        /x;
-
-    my @queue   = ( $text );
-    my @templates = ();
-
-    while( @queue ) {
-        my $string = shift @queue;
-        my @matches = $string =~ m/$regex/go;
-        @templates = ( @templates, @matches);
-        unshift @queue, map { s/^\{\{//; s/\}\}$//; $_ } @matches;
-    }
-
-    return \@templates;
 }
 
 sub findRedirectExpansions {
@@ -390,6 +360,40 @@ sub findRedirectExpansions {
     }
 
     return $results;
+}
+
+sub findTemplates {
+
+    # Find templates in a text string.
+
+    my $text = shift;
+
+    # the following code is based on perlfaq6's "Can I use Perl regular
+    # expressions to match balanced text?" example
+
+    my $regex = qr/
+        (               # start of bracket 1
+        \{\{           # match an opening template
+            (?:
+            [^{}]++      # one or more non brackets, non backtracking
+            |
+            (?1)         # recurse to bracket 1
+            )*
+        \}\}           # match a closing template
+        )               # end of bracket 1
+        /x;
+
+    my @queue   = ( $text );
+    my @templates = ();
+
+    while( @queue ) {
+        my $string = shift @queue;
+        my @matches = $string =~ m/$regex/go;
+        @templates = ( @templates, @matches);
+        unshift @queue, map { s/^\{\{//; s/\}\}$//; $_ } @matches;
+    }
+
+    return \@templates;
 }
 
 sub formatCitation {
@@ -485,6 +489,60 @@ sub loadInterwiki {
     close FILE;
 
     return $prefixes;
+}
+
+sub loadNormalizationIndex {
+
+    # Load normalizations for in-memory matching.
+
+    my $database = shift;
+    my $type = shift;
+
+    my $sth = $database->prepare('
+        SELECT citation, normalization, length
+        FROM normalizations
+        WHERE type = ?
+    ');
+    $sth->bind_param(1, $type);
+    $sth->execute();
+
+    my $index = {
+        records  => [],
+        byLength => {},
+        exact    => {},
+    };
+
+    while (my $ref = $sth->fetchrow_hashref()) {
+        my $citation = $ref->{'citation'};
+        my $normalization = $ref->{'normalization'};
+        my $length = $ref->{'length'};
+        my $id = scalar @{$index->{'records'}};
+
+        push @{$index->{'records'}}, {
+            citation      => $citation,
+            normalization => $normalization,
+        };
+
+        $index->{'exact'}->{$normalization}->{$citation} = 1;
+
+        for my $offset (0 .. 3) {
+            last if ($length <= $offset);
+            push @{$index->{'byLength'}->{$length}->{'start'}->{"$offset\t" . substr($normalization, $offset, 1)}}, $id;
+            push @{$index->{'byLength'}->{$length}->{'start'}->{"$offset\t" . substr($normalization, $offset, 2)}}, $id
+                if ($length > $offset + 1);
+        }
+
+        for my $offset (0 .. 3) {
+            last if ($length <= $offset);
+            push @{$index->{'byLength'}->{$length}->{'end'}->{"$offset\t" . substr($normalization, $length - 1 - $offset, 1)}}, $id;
+        }
+
+        if (($length >= 4) and (substr($normalization, -1, 1) eq '-')) {
+            push @{$index->{'byLength'}->{$length}->{'endDash'}->{substr($normalization, -4, 1)}}, $id;
+        }
+    }
+
+    return $index;
 }
 
 sub loadRedirects {

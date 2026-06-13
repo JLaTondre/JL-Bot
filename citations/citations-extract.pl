@@ -45,8 +45,10 @@ my @TABLES = (
 my @INDEXES = (
     'CREATE INDEX indexCType ON citations(type)',
     'CREATE INDEX indexCitation ON citations(citation)',
+    'CREATE INDEX indexCTypeCitation ON citations(type, citation)',
     'CREATE INDEX indexNType ON normalizations(type)',
     'CREATE INDEX indexNCitation ON normalizations(citation)',
+    'CREATE INDEX indexNTypeCitation ON normalizations(type, citation)',
     'CREATE INDEX indexNormalization ON normalizations(normalization)',
     'CREATE INDEX indexLength ON normalizations(length)',
     'CREATE INDEX indexDType ON dois(type)',

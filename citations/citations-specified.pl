@@ -20,6 +20,7 @@ use citations qw(
     formatCitation
     isUppercaseMatch
     loadInterwiki
+    loadNormalizationIndex
     loadRedirects
     normalizeCitation
     removeControlCharacters
@@ -952,9 +953,11 @@ for my $selected (keys %$specified) {
 my $total = scalar keys %$normalizations;
 print "  processing $total normalizations ...\n";
 
+my $normalizationIndex = loadNormalizationIndex($dbSpecific, 'journal');
+
 for my $normalization (keys %$normalizations) {
     next if ($normalization eq '--');
-    my $candidates = findNormalizations($dbSpecific, 'journal', $normalization);
+    my $candidates = findNormalizations($normalizationIndex, $normalization);
     for my $candidate (keys %$candidates) {
         my $result = findIndividual($dbSpecific, 'journal', $candidate);
         $normalizations->{$normalization}->{$candidate} = $result if ($result);
