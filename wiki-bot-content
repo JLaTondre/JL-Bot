@@ -31,6 +31,8 @@ unless (exists $ENV{'WIKI_CONFIG_DIR'}) {
 # Configuration & Explicit Globals
 #
 
+$Date::EzDate::default_warning = Date::EzDate::WARN_NONE;    # suppress warnings as parseDate() reports failures with context
+
 my $template = "User:JL-Bot/Project content";       # template to control bot
 
 my %sections = (                                    # content types & their respective section names
@@ -165,11 +167,11 @@ my $database = $ENV{'WIKI_CONFIG_DIR'} . '/../databases/db-wiki-content.sqlite3'
 # database scheme: CREATE TABLE pageInfo (page TEXT PRIMARY KEY, revid TEXT, frozen TEXT);
 #                  CREATE INDEX indexPage ON pageInfo(page);
 
-my $articlehistory;   # hold articlehistory template parsing errors
-my $dyktalk;          # hold dyktalk template parsing errors
-my $itntalk;          # hold itntalk template parsing errors
-my $pictureoftheday;  # hold pictureoftheday template parsing errors
-my $vital;            # hold vital template parsing errors
+my $articlehistory = {};   # hold articlehistory template parsing errors
+my $dyktalk = {};          # hold dyktalk template parsing errors
+my $itntalk = {};          # hold itntalk template parsing errors
+my $pictureoftheday = {};  # hold pictureoftheday template parsing errors
+my $vital = {};            # hold vital template parsing errors
 
 my $bannerPattern = 'Template:WikiProject banner shell';    # banner shell pattern matching
 my $vitalPattern = 'Template:WikiProject Vital Articles';   # vital articles pattern matching
@@ -322,6 +324,10 @@ sub getPageInfo {
     # retrieve new version
 
     my ($text, ) = $bot->getText($talk);
+
+    # remove comments so dead templates aren't parsed
+
+    $text =~ s/<!--.*?-->//gs;
 
     # replace {{date|date}}
 
@@ -921,18 +927,7 @@ sub parseArticleHistory {
                                 /gimsx)
             {
                 my $count = $1 ? $1 : 'none';
-                my $ezdate = Date::EzDate->new($2);
-
-                my $date;
-                if ($ezdate) {
-                    $date = $ezdate->{'%Y-%m-%d'};
-                }
-                else {
-                    $date = '0000-00-00';
-                    $dyktalk->{$talk} = 1;
-                }
-
-                $dates->{$count} = $date;
+                $dates->{$count} = parseDate($dyktalk, $talk, "{{Article history}} dyk${1}date", $2);
             }
 
             while ($template =~ /\|\s*dyk(\d?)entry\s*=\s*
@@ -1003,6 +998,26 @@ sub parseArticleHistory {
     }
 
     return $results;
+}
+
+sub parseDate {
+
+    # This function parses a date via Date::EzDate, reporting failures with context
+
+    my $errors = shift;      # error tracking hash for the template type
+    my $page = shift;        # page being processed
+    my $template = shift;    # template / field being processed
+    my $value = shift;       # raw date string extracted from the template
+
+    my $ezdate = Date::EzDate->new($value);
+
+    unless ($ezdate) {
+        print "WARNING: unrecognized date on '$page' in $template: '$value'\n";
+        $errors->{$page} = 1;
+        return '0000-00-00';
+    }
+
+    return $ezdate->{'%Y-%m-%d'};
 }
 
 sub parseDYK {
@@ -1088,24 +1103,14 @@ sub parseDYKTalk {
 
             # extract date
 
-            my $ezdate;
-
             if ($template =~ s/\|\s*(?:1\s*=\s*)?(\d{1,2}\s+\w+)\s*\|?\s*(\d{4})\s*(?=[\|\}])//) {
                 # dd month year
                 # dd month | year
-                $ezdate = Date::EzDate->new("$1 $2");
+                $date = parseDate($dyktalk, $talk, '{{DYK talk}}', "$1 $2");
             }
             elsif ($template =~ s/\|\s*(\w+\s+\d{1,2}),?\s*\|\s*(\d{4})\s*(?=[\|\}])//) {
                 # month dd | year
-                $ezdate = Date::EzDate->new("$1 $2");
-            }
-            else {
-                $date = '0000-00-00';
-                $dyktalk->{$talk} = 1;
-            }
-
-            if ($ezdate) {
-                $date = $ezdate->{'%Y-%m-%d'};
+                $date = parseDate($dyktalk, $talk, '{{DYK talk}}', "$1 $2");
             }
             else {
                 $date = '0000-00-00';
@@ -1143,8 +1148,7 @@ sub parseMainPageFeatured {
         my $date = $1;
 
         if ($date) {
-            my $ezdate = Date::EzDate->new($date);
-            $result = $ezdate->{'%Y-%m-%d'};
+            $result = parseDate($articlehistory, $talk, '{{Article history}} maindate', $date);
         }
         else {
             $result = '0000-00-00';
@@ -1194,13 +1198,7 @@ sub parseMainPageNews {
         }
 
         if ($date) {
-            my $ezdate = Date::EzDate->new($date);
-            $result = $ezdate->{'%Y-%m-%d'};
-
-            unless ($result) {
-                $result = '0000-00-00';
-                $itntalk->{$talk} = 1;
-            }
+            $result = parseDate($itntalk, $talk, '{{ITN talk}}', $date);
         }
 
     }
@@ -1223,13 +1221,7 @@ sub parseMainPageNews {
 
                 # convert all matches to dates
                 for my $date (@matches) {
-                    my $ezdate = Date::EzDate->new($date);
-                    my $date = $ezdate->{'%Y-%m-%d'};
-                    unless ($date) {
-                        $date = '0000-00-00';
-                        $articlehistory->{$talk} = 1;
-                    }
-                    push @dates, $date;
+                    push @dates, parseDate($articlehistory, $talk, '{{Article history}} itndate', $date);
                 }
 
                 # return earliest date if any found
@@ -1262,8 +1254,7 @@ sub parsePictureDay {
         my $date = $1;
 
         if ($date) {
-            my $ezdate = Date::EzDate->new($date);
-            $result = $ezdate->{'%Y-%m-%d'};
+            $result = parseDate($pictureoftheday, $page, '{{Picture of the day}}', $date);
         }
         else {
             $result = '0000-00-00';
