@@ -1269,7 +1269,9 @@ sub parsePictureDay {
 sub parseVital {
 
     # This function parses the talk page for the vital class
-    # It uses three global variables: $bannerPattern, $vitalPattern, & $vital
+    # It uses two global variables: $bannerPattern & $vitalPattern
+    # A missing class is not an error here; callers that know the page is a
+    # vital article record MISSING results in $vital at the point of use
 
     # TO DO: If rewritten, patterns should be passed in. Possibly through a configuration
     # hash so it simplifies passing through multiple subroutine levels.
@@ -1285,7 +1287,6 @@ sub parseVital {
         return $1 unless ($1 =~ /^\s*$/);
     }
 
-    $vital->{$talk} = 1;
     return 'MISSING';
 }
 
@@ -1759,6 +1760,7 @@ for my $update (sort keys %$toUpdate) {
                         if (($iconsPage) and ($type =~ /content-vital-articles-level/)) {
                             # output vital article icons even in compact
                             $pageInfo->{$page} = getPageInfo($bot, $dbh, $page, $revid) unless (exists $pageInfo->{$page});
+                            $vital->{"Talk:$page"} = 1 if ($pageInfo->{$page}->{vital} eq 'MISSING');
                             $output .= "{{icon|" . $pageInfo->{$page}->{vital} . "}} ";
                         }
                         $output .= $listing;
@@ -1772,6 +1774,7 @@ for my $update (sort keys %$toUpdate) {
                         if ($iconsPage) {
                             if ($type =~ /content-vital-articles-level/) {
                                 $pageInfo->{$page} = getPageInfo($bot, $dbh, $page, $revid) unless (exists $pageInfo->{$page});
+                                $vital->{"Talk:$page"} = 1 if ($pageInfo->{$page}->{vital} eq 'MISSING');
                                 $output .= "* {{icon|" . $pageInfo->{$page}->{vital} . "}} $listing";
                             }
                             else {
