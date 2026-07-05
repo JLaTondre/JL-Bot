@@ -923,7 +923,7 @@ sub parseArticleHistory {
 
             while ($template =~ /\|\s*dyk(\d?)date\s*=\s*
                                     (?!\s*(?:\||\}\}|$))      # don’t match if empty or just spaces
-                                    (.*?)\s*(?:\||$)
+                                    (.*?)\s*(?=\||$)
                                 /gimsx)
             {
                 my $count = $1 ? $1 : 'none';
@@ -1008,6 +1008,9 @@ sub parseDate {
     my $page = shift;        # page being processed
     my $template = shift;    # template / field being processed
     my $value = shift;       # raw date string extracted from the template
+
+    $value =~ s/^\s*\d{1,2}:\d{2}(?::\d{2})?\s*,?\s*(?=\S)//;  # remove leading time of day
+    $value =~ s/\s*\(UTC\)\s*$//i;                             # remove trailing timezone
 
     my $ezdate = Date::EzDate->new($value);
 
@@ -1213,8 +1216,8 @@ sub parseMainPageNews {
                 # find every non-empty itndate parameter
                 my @matches = ($template =~ /
                     \|\s*itn\d*date\s*=\s*(?:\[\[\s*)?
-                    (?!\s*(?:\||\}\}|\n))       # ignore empty or only spaces
-                    ([^|\}\n]*\S[^|\}\n]*)      # capture until next |, }} or newline
+                    (?!\s*(?:\||\}\}|\n))               # ignore empty or only spaces
+                    ([^|\}\n]*[^|\}\n\s][^|\}\n]*)      # capture until next |, }} or newline
                 /igx);
 
                 my @dates;
