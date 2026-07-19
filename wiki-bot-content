@@ -1712,12 +1712,15 @@ for my $update (sort keys %$toUpdate) {
                         $listing = '';
                         my $index = 0;
                         my $dykPage;
+                        my @pagedListings;
                         for my $date (@direction) {
                             $index++;
                             $dykPage = calculateDykPage($date) if ($index == 1);
                             $listing .= '<br>' unless ($index == 1);
-                            $listing .= $pageInfo->{$page}->{dyk}->{$date};
-                            $listing .= " <small>($date)</small>" if ($dates);
+                            my $datedListing = $pageInfo->{$page}->{dyk}->{$date};
+                            $datedListing .= " <small>($date)</small>" if ($dates);
+                            $listing .= $datedListing;
+                            push @pagedListings, [ calculateDykPage($date), $datedListing ];
                         }
                         (my $normalized = $listing) =~ s/(?:&nbsp;|\s)+/ /g;        # normalize &nbsp; and whitespace (included due to unicode spaces)
                         if ($dykseen->{$normalized}) {
@@ -1732,7 +1735,14 @@ for my $update (sort keys %$toUpdate) {
                             $output .= "<noinclude>\n";
                             $noinclude = 1;
                         }
-                        push @{ $dykBlurbsByYear->{$dykPage} }, $listing;
+                        if ($dykpaged) {
+                            for my $pagedListing (@pagedListings) {
+                                push @{ $dykBlurbsByYear->{$pagedListing->[0]} }, $pagedListing->[1];
+                            }
+                        }
+                        else {
+                            push @{ $dykBlurbsByYear->{$dykPage} }, $listing;
+                        }
                     }
 
                     if ($compact) {
