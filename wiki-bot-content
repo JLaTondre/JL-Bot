@@ -171,43 +171,11 @@ my $articlehistory = {};   # hold articlehistory template parsing errors
 my $dyktalk = {};          # hold dyktalk template parsing errors
 my $itntalk = {};          # hold itntalk template parsing errors
 my $pictureoftheday = {};  # hold pictureoftheday template parsing errors
-my $vital = {};            # hold vital template parsing errors
-
-my $bannerPattern = 'Template:WikiProject banner shell';    # banner shell pattern matching
-my $vitalPattern = 'Template:WikiProject Vital Articles';   # vital articles pattern matching
+my $vital = {};            # hold pages found in multiple vital level categories
 
 #
 # Subroutines
 #
-
-sub buildPattern {
-
-    # This subroutine builds an regex OR pattern for matching a template and its
-    # redirects.  It is passed the bot and the template and returns the pattern.
-
-    # TO DO: Move to module as also used in wiki-bot-inuse
-    # TO DO: Should be used for all templates matched on talk pages
-
-    my $bot      = shift;
-    my $template = shift;
-
-    print "Building template pattern for $template ...\n";
-
-    my $pattern .= $template . '|';
-
-    my $redirects = $bot->getRedirects($template, 10);
-    for my $redirect (sort keys %$redirects) {
-        $pattern .= $redirect . '|';
-    }
-
-    $pattern =~ s/Template://g;
-    $pattern =~ s/ /\[ _\]\+/g;
-    $pattern =~ s/\|$//;
-
-    $pattern = qr/(?:Template:\s*)?(?:$pattern)/i;
-
-    return $pattern;
-}
 
 sub calculateDykPage {
 
@@ -257,6 +225,32 @@ sub determineDates {
     }
 
     return '';
+}
+
+sub determineVitalIcon {
+
+    # Determine the icon from the vital article quality subcategory.
+
+    my $category = shift;
+
+    my %vitalIcons = (
+        'a'     => 'A',
+        'b'     => 'B',
+        'c'     => 'C',
+        'fa'    => 'FA',
+        'fl'    => 'FL',
+        'ga'    => 'GA',
+        'list'  => 'A',
+        'start' => 'Start',
+        'stub'  => 'Stub',
+    );
+
+    if ($category =~ /^Category:([^-]+)-Class[ _]+level-[1-5][ _]+vital[ _]+articles/i) {
+        my $class = lc $1;
+        return $vitalIcons{$class} if (exists $vitalIcons{$class});
+    }
+
+    return 'Vital';
 }
 
 sub getContent {
@@ -332,10 +326,6 @@ sub getPageInfo {
     # replace {{date|date}}
 
     $text =~ s/\{\{\s*date\s*\|\s*([^|{}]+?)\s*(?:\|[^{}]*)?\}\}/$1/g;
-
-    # parse vital class
-
-    $info->{vital} = parseVital($text, $talk);
 
     # parse date types
 
@@ -1269,30 +1259,6 @@ sub parsePictureDay {
     return $result;
 }
 
-sub parseVital {
-
-    # This function parses the talk page for the vital class
-    # It uses two global variables: $bannerPattern & $vitalPattern
-    # A missing class is not an error here; callers that know the page is a
-    # vital article record MISSING results in $vital at the point of use
-
-    # TO DO: If rewritten, patterns should be passed in. Possibly through a configuration
-    # hash so it simplifies passing through multiple subroutine levels.
-
-    my $text = shift;
-    my $talk = shift;
-
-    if ($text =~ /\{\{\s*$vitalPattern[^\}]+class\s*=\s*([^\|\{\}]+?)\s*(?:\||\}\}|\{\{)/is) {
-        return $1 unless ($1 =~ /^\s*$/);
-    }
-
-    if ($text =~ /\{\{\s*$bannerPattern[^\{\}]+class\s*=\s*([^\|\{\}]+?)\s*(?:\||\}\}|\{\{)/is) {
-        return $1 unless ($1 =~ /^\s*$/);
-    }
-
-    return 'MISSING';
-}
-
 sub saveResults {
 
     # This function saves the output to the page.
@@ -1389,12 +1355,6 @@ my $dbh = DBI->connect("DBI:SQLite:dbname=$database", "", "", { RaiseError => 1 
 print "\nRetrieving italic titles ...\n\n";
 my $italics = $bot->getTransclusions('Template:Italic title');
 
-# pattern matching
-
-$bannerPattern = buildPattern($bot, $bannerPattern);
-$vitalPattern = buildPattern($bot, $vitalPattern);
-print "\n";
-
 # determine vital categories
 
 for my $vitalParent (sort keys %vitalParents) {
@@ -1451,6 +1411,7 @@ if ($sFlag) {
 # iterate across pages transcluding bot template
 
 my $retrieved;      # hash ref to hold retrieved pages by source
+my $vitalClasses;   # hash ref to hold vital icon classes by level and page
 my $sortDefault;    # hash ref to hold default sort values
 
 for my $update (sort keys %$toUpdate) {
@@ -1509,9 +1470,14 @@ for my $update (sort keys %$toUpdate) {
         next if (exists $retrieved->{$type});               # don't re-retrieve
         for my $source (sort keys %{ $sources{$type} }) {
             my $members = getContent($bot, $source);
+            my $vitalIcon = determineVitalIcon($source) if ($type =~ /^content-vital-articles-level-/);
             $got = 1;
             for my $page (keys %$members) {
                 $retrieved->{$type}->{$page} = $members->{$page};
+                if (($type =~ /^content-vital-articles-level-/) and
+                    ((not exists $vitalClasses->{$type}->{$page}) or ($vitalClasses->{$type}->{$page} eq 'Vital'))) {
+                    $vitalClasses->{$type}->{$page} = $vitalIcon;
+                }
             }
         }
     }
@@ -1649,6 +1615,17 @@ for my $update (sort keys %$toUpdate) {
                 $results->{$type}->{$sort}->{'page'} = $page;
                 $results->{$type}->{$sort}->{'revid'} = $revid;
 
+                if ($type =~ /^content-vital-articles-level-/) {
+                    my @levels;
+                    for my $level (1 .. 5) {
+                        my $vitalType = "content-vital-articles-level-$level";
+                        push @levels, $level if ((exists $retrieved->{$vitalType}) and (exists $retrieved->{$vitalType}->{$talk}));
+                    }
+                    my $vitalType = "content-vital-articles-level-$levels[0]";
+                    $results->{$type}->{$sort}->{'vital'} = $vitalClasses->{$vitalType}->{$talk} || 'Vital';
+                    $vital->{$talk} = 1 if (scalar @levels > 1);
+                }
+
             }
 
         }
@@ -1762,9 +1739,7 @@ for my $update (sort keys %$toUpdate) {
                         next if ( ($maximum) and ($count > $maximum) );
                         if (($iconsPage) and ($type =~ /content-vital-articles-level/)) {
                             # output vital article icons even in compact
-                            $pageInfo->{$page} = getPageInfo($bot, $dbh, $page, $revid) unless (exists $pageInfo->{$page});
-                            $vital->{"Talk:$page"} = 1 if ($pageInfo->{$page}->{vital} eq 'MISSING');
-                            $output .= "{{icon|" . $pageInfo->{$page}->{vital} . "}} ";
+                            $output .= "{{icon|" . $results->{$type}->{$sort}->{'vital'} . "}} ";
                         }
                         $output .= $listing;
                         if (($dates) and (exists $dateTypes{$type})) {
@@ -1776,9 +1751,7 @@ for my $update (sort keys %$toUpdate) {
                     else {
                         if ($iconsPage) {
                             if ($type =~ /content-vital-articles-level/) {
-                                $pageInfo->{$page} = getPageInfo($bot, $dbh, $page, $revid) unless (exists $pageInfo->{$page});
-                                $vital->{"Talk:$page"} = 1 if ($pageInfo->{$page}->{vital} eq 'MISSING');
-                                $output .= "* {{icon|" . $pageInfo->{$page}->{vital} . "}} $listing";
+                                $output .= "* {{icon|" . $results->{$type}->{$sort}->{'vital'} . "}} $listing";
                             }
                             else {
                                 $output .=  "*" . $icons{$type} . " $listing";
