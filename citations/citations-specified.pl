@@ -860,6 +860,16 @@ print "  preparing database ...\n";
 
 my $dbSpecific = citationsDB->new;
 
+# if individual database is newer than specific database, delete specific database so it can be recreated
+
+if ((-e $DBSPECIFIC) and (-e $DBINDIVIDUAL)
+        and ((stat $DBINDIVIDUAL)[9] > (stat $DBSPECIFIC)[9])) {
+    unlink $DBSPECIFIC
+        or die "ERROR: Could not delete database ($DBSPECIFIC)\n --> $!\n\n";
+}
+
+# recreate needed tables if specific database already exists, otherwise clone individual database
+
 if (-e $DBSPECIFIC) {
     $dbSpecific->openDatabase($DBSPECIFIC);
     my @commands;
