@@ -10,6 +10,7 @@ use Benchmark;
 use File::Basename;
 use File::ReadBackwards;
 use HTML::Entities;
+use HTTP::Tiny;
 use POSIX;
 
 use lib dirname(__FILE__) . '/../modules';
@@ -548,8 +549,16 @@ sub validateDoi {
         if ($prefix < 10.1) {
             $result->{'prefix'} = 'INVALID';
         }
-        elsif (($prefix =~ /10\.\d{5}/) and ($prefix > $limit)) {
-            $result->{'prefix'} = 'INVALID';
+        elsif (($prefix =~ /10\.\d{5}/) and ($prefix > $$limit)) {
+            if (($field =~ /^10\.\d{4,5}\/[^\/]+$/) and validDoiRedirect($field)) {
+                my $oldLimit = $$limit;
+                $$limit = $prefix;
+                warn "WARNING: valid DOI prefix found above limit: $prefix > $oldLimit\n";
+                $result->{'prefix'} = $prefix;
+            }
+            else {
+                $result->{'prefix'} = 'INVALID';
+            }
         }
         else {
             $result->{'prefix'} = $prefix;
@@ -561,6 +570,26 @@ sub validateDoi {
     $result->{'entire'} = $field;
 
     return $result;
+}
+
+sub validDoiRedirect {
+
+    # Check whether doi.org redirects a DOI to a publisher URL
+
+    my $doi = shift;
+
+    my $response = eval {
+        HTTP::Tiny->new(
+            max_redirect => 0,
+            timeout      => 10,
+        )->get("https://doi.org/$doi");
+    };
+
+    return unless ($response);
+    return unless ($response->{'status'} =~ /^30[12378]$/);
+
+    my $location = $response->{'headers'}->{'location'};
+    return (($location // '') =~ m#^https?://#);
 }
 
 #
@@ -653,7 +682,7 @@ while (<INPUT>) {
 
         # process doi field
 
-        $extracted = extractDoiField($template, $doiLimit);
+        $extracted = extractDoiField($template, \$doiLimit);
         next unless ($extracted);
 
         my $prefix = $extracted->{'prefix'};
@@ -683,7 +712,7 @@ while (<INPUT>) {
         my $title    = $1;
         my $template = $2;
 
-        my $extracted = extractDoiTemplate($template, $doiLimit);
+        my $extracted = extractDoiTemplate($template, \$doiLimit);
         next unless ($extracted);
 
         $cCitations++;
