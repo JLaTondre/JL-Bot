@@ -30,8 +30,8 @@ my %dayswait = (                        # wait before removing templates (in day
 
 my %templates = (                       # templates to check by type
     'CONSTRUCTION' => [
-        'Template:In creation',
-        'Template:New page',
+        'Template:Being created',
+        'Template:List under construction',
         'Template:Under construction',
     ],
     'INUSE' => [
