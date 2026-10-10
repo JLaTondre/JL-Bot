@@ -362,6 +362,10 @@ sub removeTemplates {
         $template =~ s/\{\{\s*interlanguage(?: link(?: multi)?)?\s*\|([^\}\|]+).*?\}\}/$1/ig;       # replace {{interlanguage link|text|...}}
         $template =~ s/\{\{\s*link-interwiki\s*\|([^\}\|]+).*?\}\}/$1/ig;                           # replace {{link-interwiki|text|...}}
 
+        while ($template =~ s/(\{\{\s*langlink(?=\s*[|}])[^{}]*?)\|\s*straight\s*=\s*[^|}]*(?=\||\}\})/$1/ig) {}    # remove straight= parameters
+        $template =~ s/\{\{\s*langlink\s*\|[^|}]*\|[^|}]*\|\s*([^|}]+)\}\}/$1/ig;                                   # replace {{langlink|code|title|text}}
+        $template =~ s/\{\{\s*langlink\s*\|[^|}]*\|\s*([^|}]+)\}\}/$1/ig;                                           # replace {{langlink|code|text}}
+
         while ($template =~ s/(\{\{\s*langx?(?=\s*[|}])[^{}]*?)\|\s*(?!(?:2|text)\s*=)[^|=\s]+(?:\s*=\s*)[^|}]*(?=\||\}\})/$1/ig) {}    # remove non-(2|text)= parameters
         $template =~ s/\{\{\s*langx?(?=\s*[|}])[^}]*?\|\s*(?:2|text)\s*=\s*([^|}]+)[^}]*\}\}/$1/ig;                                     # replace {{lang|...|(2|text)=text|...}}
         $template =~ s/\{\{\s*langx?\s*\|[^\|]+\|\s*([^\}]+)\}\}/$1/ig;                                                                 # replace {{lang|...|text|...}}
