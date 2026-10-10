@@ -83,6 +83,35 @@ my %SHORTCUT = (
     'magazine' => 'Wikipedia:MCW',
 );
 
+my %ACCESS = (
+    # access type by category (and whether recursive category inclusion is needed)
+    'no' => {                                                           # closed access
+        'Category:Closed access journals (infobox)' => 'yes',
+    },
+    'doa' => {                                                          # delayed open access
+        'Category:Delayed open-access journals' => 'yes',
+        'Category:Delayed open access journals (infobox)' => 'yes',
+    },
+    'hoa' => {                                                          # hybrid open access
+        'Category:Hybrid open-access journals' => 'yes',
+        'Category:Hybrid open access journals (infobox)' => 'yes',
+    },
+    'oa' => {                                                           # open access
+        'Category:Open-access journals' => 'no',
+        'Category:Open access journals (infobox)' => 'no',
+        'Category:Open access publishers' => 'yes',
+        'Category:BioMed Central academic journals' => 'yes',
+        'Category:Creative Commons-licensed journals' => 'yes',
+        'Category:Diamond open-access journals' => 'yes',
+    },
+    's2oa' => {                                                         # subscribe to open access
+        'Category:Subscribe to Open journals (infobox)' => 'yes',
+    },
+    '?' => {                                                            # unknown access
+        'Category:Unknown access journals (infobox)' => 'yes',
+    },
+);
+
 
 #
 # Subroutines
@@ -96,6 +125,7 @@ sub generateIndividual {
     my $type = shift;
     my $letter = shift;
     my $row = shift;
+    my $access = shift;
 
     my $sth = $database->prepare("
         SELECT citation, dFormat, dType, target, tFormat, tType, cCount, aCount
@@ -134,12 +164,23 @@ sub generateIndividual {
         my $dType = setType( $type, $record->{'d-type'} );
         my $tType = setType( $type, $record->{'t-type'} );
 
+        my $dAccess = $access->{$citation} // '?';
+        my $tAccess = $access->{$record->{'target'}} // '?';
+
         my $cCount  = $record->{'citations'};
         my $aCount  = $record->{'articles'};
 
         my $search = createSearch($citation);
 
-        my $line = "{{$row|display=$display|d-type=$dType|target=$target|t-type=$tType|citations=$cCount|articles=$aCount|search=$search}}\n";
+        my $line = "{{$row|display=$display|d-type=$dType";
+        if ($type eq 'journal') {
+            $line .= "|d-oa=$dAccess";
+        }
+        $line .= "|target=$target|t-type=$tType";
+        if ($type eq 'journal') {
+            $line .= "|t-oa=$tAccess";
+        }
+        $line .= "|citations=$cCount|articles=$aCount|search=$search}}\n";
 
         push @results, $line;
     }
@@ -155,6 +196,7 @@ sub generatePopular {
     my $type = shift;
     my $maximum = shift;
     my $row = shift;
+    my $access = shift;
 
     # find the minimum count to return
 
@@ -221,11 +263,22 @@ sub generatePopular {
             my $dType = setType( $type, $record->{'d-type'} );
             my $tType = setType( $type, $record->{'t-type'} );
 
+            my $dAccess = $access->{$citation} // '?';
+            my $tAccess = $access->{$record->{'target'}} // '?';
+
             my $aCount  = $record->{'articles'};
 
             my $search = createSearch($citation);
 
-            my $line = "{{$row|rank=$rank|display=$display|d-type=$dType|target=$target|t-type=$tType|citations=$cCount|articles=$aCount|search=$search}}\n";
+            my $line = "{{$row|rank=$rank|display=$display|d-type=$dType";
+            if ($type eq 'journal') {
+                $line .= "|d-oa=$dAccess";
+            }
+            $line .= "|target=$target|t-type=$tType";
+            if ($type eq 'journal') {
+                $line .= "|t-oa=$tAccess";
+            }
+            $line .= "|citations=$cCount|articles=$aCount|search=$search}}\n";
 
             push @results, $line;
         }
@@ -244,6 +297,7 @@ sub generateMissing {
     my $type = shift;
     my $maximum = shift;
     my $row = shift;
+    my $access = shift;
 
     # find the minimum count to return
 
@@ -312,11 +366,22 @@ sub generateMissing {
             my $dType = setType( $type, $record->{'d-type'} );
             my $tType = setType( $type, $record->{'t-type'} );
 
+            my $dAccess = $access->{$citation} // '?';
+            my $tAccess = $access->{$record->{'target'}} // '?';
+
             my $aCount  = $record->{'articles'};
 
             my $search = createSearch($citation);
 
-            my $line = "{{$row|rank=$rank|display=$display|d-type=$dType|target=$target|t-type=$tType|citations=$cCount|articles=$aCount|search=$search}}\n";
+            my $line = "{{$row|rank=$rank|display=$display|d-type=$dType";
+            if ($type eq 'journal') {
+                $line .= "|d-oa=$dAccess";
+            }
+            $line .= "|target=$target|t-type=$tType";
+            if ($type eq 'journal') {
+                $line .= "|t-oa=$tAccess";
+            }
+            $line .= "|citations=$cCount|articles=$aCount|search=$search}}\n";
 
             push @results, $line;
         }
@@ -375,6 +440,7 @@ sub generateCommon {
     my $type = shift;
     my $max = shift;
     my $row = shift;
+    my $access = shift;
 
     my $sth = $database->prepare("
         SELECT target, entries, articles, citations
@@ -396,10 +462,15 @@ sub generateCommon {
         my $entries = $ref->{'entries'};
         my $articles = $ref->{'articles'};
         my $citations = $ref->{'citations'};
+        my $tAccess = $access->{$target} // '?';
 
         $rank++;
 
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|entries=\n$entries}}\n";
+        my $line = "{{$row|rank=$rank|target=[[$target]]";
+        if ($type eq 'journal') {
+            $line .= "|t-oa=$tAccess";
+        }
+        $line .= "|citations=$citations|articles=$articles|entries=\n$entries}}\n";
 
         push @results, $line;
     }
@@ -456,6 +527,7 @@ sub generateQuestionable {
 
     my $database = shift;
     my $row = shift;
+    my $access = shift;
 
     my $sth = $database->prepare("
         SELECT target, entries, entryCount, lineCount, articles, citations, source, note, doi
@@ -479,12 +551,13 @@ sub generateQuestionable {
         my $source = $ref->{'source'};
         my $note = $ref->{'note'};
         my $doi = $ref->{'doi'};
+        my $tAccess = $access->{$target} // '?';
 
         $rank++;
 
         $target = ":$target" if (requiresColon($target));
 
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|source=$source|note=$note|doi1=$doi|l-count=$lineCount|e-count=$entryCount|entries=\n$entries}}\n";
+        my $line = "{{$row|rank=$rank|target=[[$target]]|t-oa=$tAccess|citations=$citations|articles=$articles|source=$source|note=$note|doi1=$doi|l-count=$lineCount|e-count=$entryCount|entries=\n$entries}}\n";
 
         push @results, $line;
     }
@@ -524,6 +597,7 @@ sub generatePublisher {
 
     my $database = shift;
     my $row = shift;
+    my $access = shift;
 
     my $sth = $database->prepare("
         SELECT target, entries, entryCount, lineCount, articles, citations, note, doi
@@ -546,12 +620,13 @@ sub generatePublisher {
         my $citations = $ref->{'citations'};
         my $note = $ref->{'note'};
         my $doi = $ref->{'doi'};
+        my $tAccess = $access->{$target} // '?';
 
         $rank++;
 
         $target = ":$target" if (requiresColon($target));
 
-        my $line = "{{$row|rank=$rank|target=[[$target]]|citations=$citations|articles=$articles|note=$note|doi1=$doi|l-count=$lineCount|e-count=$entryCount|entries=\n$entries}}\n";
+        my $line = "{{$row|rank=$rank|target=[[$target]]|t-oa=$tAccess|citations=$citations|articles=$articles|note=$note|doi1=$doi|l-count=$lineCount|e-count=$entryCount|entries=\n$entries}}\n";
 
         push @results, $line;
     }
@@ -1118,6 +1193,130 @@ sub generateScriptColors {
     return \@results;
 }
 
+sub retrieveAccessTypes {
+
+    # Retrieve access types from configuration
+
+    print "  retrieving access types ...\n";
+
+    my $bot = shift;
+    my $configuration = shift;
+    my $date = shift;
+
+    my %memberships;
+
+    for my $accessType (keys %$configuration) {
+        for my $rootCategory (keys %{$configuration->{$accessType}}) {
+
+            my $recursive = $configuration->{$accessType}->{$rootCategory} eq 'yes';
+            my @categories = ($rootCategory);
+            my %processed;
+
+            while (@categories) {
+                my $category = shift @categories;
+                next if ($processed{$category}++);
+
+                my $categoryMembers = $bot->getCategoryMembers($category, '0');
+                for my $member (keys %{$categoryMembers // {}}) {
+                    $memberships{$member}->{$accessType} = 1;
+                }
+
+                next unless ($recursive);
+
+                my $subcategories = $bot->getCategoryMembers($category, '14');
+                push @categories, keys %{$subcategories // {}};
+            }
+        }
+    }
+
+    # find the highest priority access type for each member if multiples
+
+    my $results = {};
+
+    my @accessPriority = qw( oa s2oa doa hoa no ? );
+    my %accessLabel = (
+        'oa'   => 'OA',
+        's2oa' => 'S2Open',
+        'doa'  => 'Delayed',
+        'hoa'  => 'Hybrid',
+        'no'   => 'Closed',
+        '?'    => 'Unknown',
+    );
+
+    for my $member (keys %memberships) {
+        for my $accessType (@accessPriority) {
+            if ($memberships{$member}->{$accessType}) {
+                $results->{$member} = $accessType;
+                last;
+            }
+        }
+    }
+
+    # report any members that are in multiple access categories
+
+    my @multipleConflicts;
+
+    for my $member (sort keys %memberships) {
+        my @accessTypes = grep { $memberships{$member}->{$_} } @accessPriority;
+        if (@accessTypes > 1) {
+            my $types = join(', ', map { $accessLabel{$_} } @accessTypes);
+            push @multipleConflicts, "* [[$member]] -> $types";
+        }
+    }
+
+    # report any redirects that are in different access categories than their targets
+
+    my $database = citationsDB->new;
+    $database->openDatabase($DBTITLES);
+
+    my $sth = $database->prepare(q{
+        SELECT pageType, target
+        FROM titles
+        WHERE title = ?
+    });
+
+    my @redirectConflicts;
+
+    for my $redirect (sort keys %memberships) {
+        $sth->bind_param(1, $redirect);
+        $sth->execute();
+
+        my $record = $sth->fetchrow_hashref();
+        next unless ($record && (($record->{'pageType'} // '') =~ /^REDIRECT/));
+
+        my $target = $record->{'target'};
+        next unless (defined $target && exists $memberships{$target});
+
+        my @redirectTypes = grep { $memberships{$redirect}->{$_} } @accessPriority;
+        my @targetTypes = grep { $memberships{$target}->{$_} } @accessPriority;
+        next if (grep { $memberships{$target}->{$_} } @redirectTypes);
+
+        my $redirectAccess = join(', ', map { $accessLabel{$_} } @redirectTypes);
+        my $targetAccess = join(', ', map { $accessLabel{$_} } @targetTypes);
+        push @redirectConflicts, "* [[$redirect]] ($redirectAccess) -> [[$target]] ($targetAccess)";
+    }
+
+    $sth->finish();
+    $database->disconnect;
+
+    # save conflicts
+
+    my $page = "Wikipedia:WikiProject Academic Journals/Journals cited by Wikipedia/Verify OA Status";
+    my ($text, $timestamp) = $bot->getText($page);
+
+    my $output = "\nThe following pages are in multiple access categories:\n\n";
+    $output .= "$_\n" for @multipleConflicts;
+
+    $output .= "\nThe following redirects are in different access categories than their targets:\n\n";
+    $output .= "$_\n" for @redirectConflicts;
+
+    $output .= "\nNOTE: Redirects and targets are as of the $date database dump. Access types are as of the last save.\n";
+
+    $bot->saveText($page, $timestamp, $output, 'updating Wikipedia citation statistics', 'NotMinor', 'Bot');
+
+    return $results;
+}
+
 
 #
 # Main
@@ -1188,6 +1387,10 @@ print "Saving to Wikipedia ...\n";
 
 my $wikidate = queryDate($DBTITLES);
 
+# load access types
+
+my $access = retrieveAccessTypes($bot, \%ACCESS, $wikidate);
+
 # save individual pages
 
 if ($saveIndividual) {
@@ -1216,14 +1419,14 @@ if ($saveIndividual) {
         my $bottom = "$bottom{$type}|date=$wikidate";
 
         for my $letter (@INITIALS) {
-            my $records = generateIndividual($database, $type, $letter, $row{$type});
+            my $records = generateIndividual($database, $type, $letter, $row{$type}, $access);
             savePages($bot, $type, $letter, $top, $bottom, $records, $NORMALMAX, $LINEMAX);
         }
 
-        my $records = generatePopular($database, $type, $POPULAR, $row{$type});
+        my $records = generatePopular($database, $type, $POPULAR, $row{$type}, $access);
         savePages($bot, $type, 'Popular', $top, $bottom, $records, $NORMALMAX, $LINEMAX);
 
-        $records = generateMissing($database, $type, $POPULAR, $row{$type});
+        $records = generateMissing($database, $type, $POPULAR, $row{$type}, $access);
         savePages($bot, $type, 'Missing', $top, $bottom, $records, $NORMALMAX, $LINEMAX);
 
         $bottom .= '|type=no|legend=no';
@@ -1265,7 +1468,7 @@ if ($saveCommon) {
     $database->openDatabase($DBCOMMON);
 
     for my $type (@TYPES) {
-        my $records = generateCommon($database, $type, $COMMON{$type}, $row{$type});
+        my $records = generateCommon($database, $type, $COMMON{$type}, $row{$type}, $access);
         my $revision = commonRevision($database);
 
         my $top = $top{$type};
@@ -1291,7 +1494,7 @@ if ($saveQuestionable) {
     my $database = citationsDB->new;
     $database->openDatabase($DBSPECIFIC);
 
-    my $records = generateQuestionable($database, $row);
+    my $records = generateQuestionable($database, $row, $access);
     my $revision = questionableRevisions($database);
     savePages($bot, 'journal', 'Questionable', $top, $bottomQuestionable, $records, $COMMONMAX, $LINEMAX);
     saveBottom($bot, $bottomQuestionable, "{{$bottom|date=$wikidate|$revision}}");
@@ -1312,7 +1515,7 @@ if ($savePublishers) {
     my $database = citationsDB->new;
     $database->openDatabase($DBSPECIFIC);
 
-    my $records = generatePublisher($database, $row);
+    my $records = generatePublisher($database, $row, $access);
     my $revision = publisherRevisions($database);
     savePages($bot, 'journal', 'Publisher', $top, $bottomPublishers, $records, $COMMONMAX, $LINEMAX);
     saveBottom($bot, $bottomPublishers, "{{$bottom|date=$wikidate|$revision}}");
