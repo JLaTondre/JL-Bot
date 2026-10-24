@@ -378,22 +378,26 @@ sub getBacklinks {
         $namespaces = $_allnamespaces;
     }
 
-    my $results = _list($self, "MyBot->getBacklinks", {
+    my $options = {
         action      => 'query',
         list        => 'backlinks',
         bltitle     => $page,
         blnamespace => $namespaces,
-        blredirect  => $redirects,
         bllimit     => 'max'
-    } );
+    };
 
-    my $backlinks;
+    # MediaWiki boolean parameters are true whenever present, even with value 0.
+    $options->{blredirect} = 1 if ($redirects);
+
+    my $results = _list($self, "MyBot->getBacklinks", $options);
+
+    my $backlinks = {};
 
     for my $result ( @$results ) {
 
         $backlinks->{ $result->{title} } = 1 if (not exists $result->{redirect});
 
-        if (exists $result->{redirlinks}) {
+        if ($redirects and exists $result->{redirlinks}) {
             for my $redirlinks ( @{$result->{redirlinks}} ) {
                 $backlinks->{ $redirlinks->{title} } = 1;
             }
@@ -760,21 +764,30 @@ sub getRedirects {
         $namespaces = $_allnamespaces;
     }
 
-    my $results = _api($self, "MyBot->getRedirects", {
+    my $options = {
         action      => 'query',
         prop        => 'redirects',
         titles      => $page,
         rdnamespace => $namespaces,
         rdprop      => 'title',
         rdlimit     => 'max'
-    } );
+    };
 
-    my ($id, $data) = %{$results->{query}->{pages}};
+    $options->{rdnamespace} = '*' if ($namespaces eq $_allnamespaces);
 
-    my $redirects;    # hard ref
+    my $redirects = {};
 
-    for my $redirect ( @{ $data->{redirects} } ) {
-        $redirects->{ $redirect->{title} } = 1;
+    while (1) {
+        my $results = _api($self, "MyBot->getRedirects", $options);
+
+        for my $data (values %{$results->{query}->{pages} || {}}) {
+            for my $redirect (@{$data->{redirects} || []}) {
+                $redirects->{$redirect->{title}} = 1;
+            }
+        }
+
+        last unless ($results->{continue});
+        $options = { %$options, %{$results->{continue}} };
     }
 
     return $redirects;
